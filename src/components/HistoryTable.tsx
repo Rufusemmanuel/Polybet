@@ -1,5 +1,17 @@
 ﻿import { format } from 'date-fns';
-import type { HistoryEntryDto } from '@/lib/polymarket/types';
+type HistoryEntryDto = {
+  id: string;
+  marketId: string;
+  title: string;
+  category?: string | null;
+  trackedOutcome: string;
+  entryPrice: number;
+  resolvedOutcome: string;
+  appearedAt: string;
+  resolvedAt: string;
+  closedAt?: string | null;
+  marketUrl: string;
+};
 
 type Props = {
   entries: HistoryEntryDto[];
