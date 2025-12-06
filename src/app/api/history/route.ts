@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
-    if (!process.env.DATABASE_URL) {
+    if (!prisma) {
       console.warn('/api/history: DATABASE_URL is not set; returning empty history.');
       return NextResponse.json({ history: [], total: 0 });
     }
