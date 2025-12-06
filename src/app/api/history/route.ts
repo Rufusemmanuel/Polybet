@@ -6,6 +6,11 @@ import { prisma } from '@/lib/prisma';
 
 export async function GET() {
   try {
+    if (!process.env.DATABASE_URL) {
+      console.warn('/api/history: DATABASE_URL is not set; returning empty history.');
+      return NextResponse.json({ history: [], total: 0 });
+    }
+
     const history = await prisma.historyEntry.findMany({
       orderBy: { resolvedAt: 'desc' },
     });
@@ -23,8 +28,12 @@ export async function GET() {
     console.error('/api/history error', error);
     console.error('DATABASE_URL', process.env.DATABASE_URL);
     return NextResponse.json(
-      { error: 'Failed to load history. Check DATABASE_URL and that ./data/polybet.db is accessible.' },
-      { status: 500 },
+      {
+        history: [],
+        total: 0,
+        error: 'Failed to load history. Check DATABASE_URL and that ./data/polybet.db is accessible.',
+      },
+      { status: 200 },
     );
   }
 }
