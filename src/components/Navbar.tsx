@@ -3,7 +3,6 @@ import Image from 'next/image';
 
 const navItems = [
   { label: 'Markets', href: '#markets' },
-  { label: 'History', href: '#history' },
   { label: 'About', href: '#about' },
 ];
 
