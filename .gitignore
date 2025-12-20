@@ -5,6 +5,8 @@ out
 .env.local
 .prisma
 coverage
+data/polypicks.db
+data/polypicks.db-journal
 data/polybet.db
 data/polybet.db-journal
 npm-debug.log*

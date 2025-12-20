@@ -160,7 +160,7 @@ export const getActiveMarkets = async (): Promise<MarketSummary[]> => {
         const top = await getTopOfBook(tokenId);
         return { ...market, bestBid: top.bestBid, bestAsk: top.bestAsk, spreadBps: top.spreadBps };
       } catch (error) {
-        console.error('[Polybet] getTopOfBook error', { marketId: market.id, tokenId, error });
+        console.error('[PolyPicks] getTopOfBook error', { marketId: market.id, tokenId, error });
         return market;
       }
     }),
@@ -214,7 +214,7 @@ export const getMarketDetails = async (
     const top = await getTopOfBook(tokenId);
     return { ...base, bestBid: top.bestBid, bestAsk: top.bestAsk, spreadBps: top.spreadBps };
   } catch (error) {
-    console.error('[Polybet] getTopOfBook error', { marketId: market.id, tokenId, error });
+    console.error('[PolyPicks] getTopOfBook error', { marketId: market.id, tokenId, error });
     return base;
   }
 };

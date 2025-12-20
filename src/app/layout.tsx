@@ -4,12 +4,11 @@ import type { Metadata } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Polybet',
-  description: 'Polybet is running.',
+  title: 'PolyPicks',
+  description: 'PolyPicks is running.',
   icons: {
     icon: [
-      { url: '/polybet-favicon.png', type: 'image/png' },
-      { url: '/polybet-favicon.ico', rel: 'icon' },
+      { url: '/polypicks-favicon.png', type: 'image/png' },
     ],
   },
 };

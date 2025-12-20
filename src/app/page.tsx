@@ -171,7 +171,7 @@ function Hero({
     >
       <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 py-12 md:flex-row md:items-center md:justify-between">
         <div className="max-w-3xl space-y-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-[#002cff]">Polybet</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-[#002cff]">PolyPicks</p>
           <h1 className={`text-4xl font-bold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
             High-confidence Polymarket signals, refreshed in real time.
           </h1>
@@ -392,8 +392,8 @@ function MarketsSection({
                 isDark ? 'text-slate-100' : 'text-slate-800'
               }`}
             >
-              <Image src="/polybet.png" alt="Polybet logo" width={20} height={20} />
-              <span>Polybet</span>
+              <Image src="/polypicks.png" alt="PolyPicks logo" width={20} height={20} />
+              <span>PolyPicks</span>
             </div>
             <input
               type="text"
@@ -445,10 +445,10 @@ function AboutSection({ isDark }: { isDark: boolean }) {
     <section id="about" className={isDark ? 'bg-[#0d1428]' : 'bg-slate-50'}>
       <div className="mx-auto max-w-6xl px-4 py-12 space-y-4">
         <h2 className={`text-2xl font-bold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-          About Polybet
+          About PolyPicks
         </h2>
         <p className={isDark ? 'text-slate-300' : 'text-slate-600'}>
-          Polybet is a powerful tool designed to help individuals and traders secure the best live bets. we refine and narrow down the odds to deliver top-tier selections.
+          PolyPicks is a powerful tool designed to help individuals and traders secure the best live bets. We refine and narrow down the odds to deliver top-tier selections.
         </p>
       </div>
     </section>

@@ -64,19 +64,21 @@ function filterByWindow(
 
 export async function GET() {
   try {
-    const debugRelax = process.env.POLYBET_DEBUG_RELAX === 'true';
+    const debugRelaxEnv = process.env.POLYPICKS_DEBUG_RELAX ?? process.env.POLYBET_DEBUG_RELAX;
+    const debugRelax =
+      debugRelaxEnv === '1' || debugRelaxEnv?.toString().toLowerCase() === 'true';
     const markets = await getActiveMarkets();
     const now = Date.now();
 
-    console.log('[Polybet] debugRelax:', debugRelax);
-    console.log('[Polybet] raw markets length:', markets.length);
-    console.log('[Polybet] raw markets sample:', markets.slice(0, LOG_SAMPLE_SIZE));
+    console.log('[PolyPicks] debugRelax:', debugRelax);
+    console.log('[PolyPicks] raw markets length:', markets.length);
+    console.log('[PolyPicks] raw markets sample:', markets.slice(0, LOG_SAMPLE_SIZE));
 
     if (debugRelax) {
       // Base filters only; no time windows
       const relaxed = baseFilter(markets, now);
-      console.log('[Polybet] debugRelax base-filtered length:', relaxed.length);
-      console.log('[Polybet] debugRelax sample:', relaxed.slice(0, LOG_SAMPLE_SIZE));
+      console.log('[PolyPicks] debugRelax base-filtered length:', relaxed.length);
+      console.log('[PolyPicks] debugRelax sample:', relaxed.slice(0, LOG_SAMPLE_SIZE));
       return NextResponse.json<MarketSummary[]>(relaxed);
     }
 
@@ -91,14 +93,14 @@ export async function GET() {
     // >24h–48h inclusive
     const window48 = filterByWindow(markets, DAY_MS, 2 * DAY_MS, now);
 
-    console.log('[Polybet] filtered markets 24h length:', window24.length);
-    console.log('[Polybet] filtered markets 24h sample:', window24.slice(0, LOG_SAMPLE_SIZE));
-    console.log('[Polybet] filtered markets 48h length:', window48.length);
-    console.log('[Polybet] filtered markets 48h sample:', window48.slice(0, LOG_SAMPLE_SIZE));
+    console.log('[PolyPicks] filtered markets 24h length:', window24.length);
+    console.log('[PolyPicks] filtered markets 24h sample:', window24.slice(0, LOG_SAMPLE_SIZE));
+    console.log('[PolyPicks] filtered markets 48h length:', window48.length);
+    console.log('[PolyPicks] filtered markets 48h sample:', window48.slice(0, LOG_SAMPLE_SIZE));
 
     return NextResponse.json({ window24, window48 });
   } catch (err) {
-    console.error('[Polybet] /api/markets error:', err);
+    console.error('[PolyPicks] /api/markets error:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

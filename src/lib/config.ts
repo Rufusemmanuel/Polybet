@@ -1,5 +1,8 @@
 // src/lib/config.ts
-import { MAX_ODDS, MAX_TIME_TO_CLOSE_MS, MIN_ODDS } from './config/polybetCriteria';
+import { MAX_ODDS, MAX_TIME_TO_CLOSE_MS, MIN_ODDS } from './config/polypicksCriteria';
+
+const debugRelaxEnv = process.env.POLYPICKS_DEBUG_RELAX ?? process.env.POLYBET_DEBUG_RELAX;
+const debugRelaxEnabled = debugRelaxEnv === '1' || debugRelaxEnv?.toLowerCase() === 'true';
 
 export const POLYMARKET_CONFIG = {
   // Core Gamma / RTDS endpoints
@@ -10,7 +13,7 @@ export const POLYMARKET_CONFIG = {
   marketPageBase: process.env.POLYMARKET_MARKET_BASE ?? 'https://polymarket.com/event/',
   twitterUrl: process.env.NEXT_PUBLIC_TWITTER_URL ?? 'https://x.com/Poly_Bets',
 
-  // Polybet odds & time config
+  // PolyPicks odds & time config
   priceFloor: MIN_ODDS,
   priceCeil: MAX_ODDS,
   maxMinutesToClose: MAX_TIME_TO_CLOSE_MS / 60000,
@@ -19,8 +22,8 @@ export const POLYMARKET_CONFIG = {
   clobBaseUrl: process.env.POLYMARKET_CLOB_URL ?? 'https://clob.polymarket.com',
 
   // Debug flag to disable filtering from the markets route if needed
-  // Set POLYBET_DEBUG_RELAX=1 in .env to turn this on.
-  debugRelax: process.env.POLYBET_DEBUG_RELAX === '1',
+  // Set POLYPICKS_DEBUG_RELAX=1 in .env to turn this on (POLYBET_DEBUG_RELAX supported for backward compatibility).
+  debugRelax: debugRelaxEnabled,
 } as const;
 
-export type PolybetConfig = typeof POLYMARKET_CONFIG;
+export type PolyPicksConfig = typeof POLYMARKET_CONFIG;

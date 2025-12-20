@@ -31,7 +31,7 @@ export async function GET() {
       {
         history: [],
         total: 0,
-        error: 'Failed to load history. Check DATABASE_URL and that ./data/polybet.db is accessible.',
+        error: 'Failed to load history. Check DATABASE_URL and that ./data/polypicks.db is accessible.',
       },
       { status: 200 },
     );

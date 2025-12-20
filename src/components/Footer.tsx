@@ -4,7 +4,7 @@ export function Footer() {
   return (
     <footer className="bg-[#002cff] text-white">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 text-sm">
-        <span className="font-semibold">Polybet</span>
+        <span className="font-semibold">PolyPicks</span>
         <a
           href={POLYMARKET_CONFIG.twitterUrl}
           target="_blank"
