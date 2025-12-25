@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import { parseMatchupFromTitle } from '../src/lib/sports/providers/football-data';
+import {
+  isAmericanLeagueMarket,
+  isSoccerMarket,
+  parseMatchupFromTitle,
+} from '../src/lib/sports/providers/football-data';
 
 const cases = [
   {
@@ -31,4 +35,22 @@ for (const testCase of cases) {
   }
 }
 
-console.log(`Matchup parse harness passed (${cases.length} cases).`);
+const soccerGateCases = [
+  {
+    title: 'Manchester United FC vs. Newcastle United FC: O/U 1.5',
+    slug: 'epl-mun-new-2025-12-26-total-1pt5',
+    expectSoccer: true,
+    expectAmerican: false,
+  },
+];
+
+for (const testCase of soccerGateCases) {
+  const soccer = isSoccerMarket(testCase.title, testCase.slug, []);
+  const american = isAmericanLeagueMarket(testCase.title, testCase.slug);
+  assert.equal(soccer, testCase.expectSoccer, `${testCase.title} soccer gate`);
+  assert.equal(american, testCase.expectAmerican, `${testCase.title} american gate`);
+}
+
+console.log(
+  `Matchup parse harness passed (${cases.length + soccerGateCases.length} cases).`,
+);

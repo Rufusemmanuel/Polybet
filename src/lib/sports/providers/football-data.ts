@@ -112,6 +112,9 @@ const normalizeName = (name: string) =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const hasSlugToken = (slug: string, token: string) =>
+  new RegExp(`(^|-)${token}(-|$)`, 'i').test(slug);
+
 export const normalizeTeamName = (name: string) => {
   const tokens = normalizeName(name)
     .split(' ')
@@ -275,7 +278,7 @@ export const isSoccerMarket = (title: string, slug: string, tags?: string[]) => 
   const lowerSlug = slug.toLowerCase();
   const lowerTitle = title.toLowerCase();
   const lowerTags = (tags ?? []).map((tag) => tag.toLowerCase());
-  const slugHit = [
+  const slugTokens = [
     'epl',
     'premier-league',
     'ucl',
@@ -284,9 +287,14 @@ export const isSoccerMarket = (title: string, slug: string, tags?: string[]) => 
     'la-liga',
     'serie-a',
     'ligue-1',
+    'fifa',
+    'uefa',
+    'afcon',
+    'world-cup',
     'soccer',
     'football',
-  ].some((token) => lowerSlug.includes(token));
+  ];
+  const slugHit = slugTokens.some((token) => hasSlugToken(lowerSlug, token));
   const tagHit = lowerTags.some((tag) => tag.includes('soccer') || tag.includes('football'));
   return slugHit || tagHit || lowerTitle.includes('football') || lowerTitle.includes('soccer');
 };
@@ -294,14 +302,8 @@ export const isSoccerMarket = (title: string, slug: string, tags?: string[]) => 
 export const isAmericanLeagueMarket = (title: string, slug: string) => {
   const lowerSlug = slug.toLowerCase();
   const lowerTitle = title.toLowerCase();
-  if (
-    lowerSlug.startsWith('nfl-') ||
-    lowerSlug.startsWith('nba-') ||
-    lowerSlug.startsWith('mlb-') ||
-    lowerSlug.startsWith('nhl-')
-  ) {
-    return true;
-  }
+  const slugTokens = ['nfl', 'nba', 'mlb', 'nhl'];
+  if (slugTokens.some((token) => hasSlugToken(lowerSlug, token))) return true;
   return (
     /\bnfl\b/i.test(lowerTitle) ||
     /\bnba\b/i.test(lowerTitle) ||
