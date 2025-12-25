@@ -10,9 +10,10 @@ type MarketForCard = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
 type Props = {
   market: MarketForCard;
   isDark: boolean;
+  onOpenDetails?: (marketId: string) => void;
 };
 
-export function MarketCard({ market, isDark }: Props) {
+export function MarketCard({ market, isDark, onOpenDetails }: Props) {
   const [remaining, setRemaining] = useState(() =>
     differenceInMilliseconds(new Date(market.endDate), Date.now()),
   );
@@ -105,6 +106,17 @@ export function MarketCard({ market, isDark }: Props) {
           >
             Trade on Polymarket
           </a>
+          <button
+            type="button"
+            onClick={() => onOpenDetails?.(market.id)}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+              isDark
+                ? 'border-slate-600 text-slate-200 hover:border-slate-400'
+                : 'border-slate-300 text-slate-700 hover:border-slate-500'
+            }`}
+          >
+            Market details
+          </button>
           <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             ID:{' '}
             <span className={`font-mono ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>

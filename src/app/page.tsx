@@ -9,6 +9,7 @@ import { Providers } from '@/components/providers';
 import { useMarkets } from '@/lib/useMarkets';
 import { MarketCard } from '@/components/MarketCard';
 import { Skeleton } from '@/components/Skeleton';
+import { MarketDetailsDrawer } from '@/components/MarketDetailsDrawer';
 import type { MarketSummary } from '@/lib/polymarket/types';
 
 type MarketWithStrings = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
@@ -258,6 +259,8 @@ function MarketsSection({
   const [activeSubdivision, setActiveSubdivision] = useState<'All' | Subdivision>('All');
   const [windowMode, setWindowMode] = useState<WindowMode>('24');
   const [search, setSearch] = useState('');
+  const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   const marketsByWindow = useMemo<MarketWithStrings[]>(() => {
     if (!data) return [];
@@ -432,10 +435,24 @@ function MarketsSection({
 
         <div className="grid gap-4 md:grid-cols-2">
           {visibleMarkets.map((m) => (
-            <MarketCard key={m.id} market={m as MarketWithStrings} isDark={isDark} />
+            <MarketCard
+              key={m.id}
+              market={m as MarketWithStrings}
+              isDark={isDark}
+              onOpenDetails={(marketId) => {
+                setSelectedMarketId(marketId);
+                setIsDetailsOpen(true);
+              }}
+            />
           ))}
         </div>
       </div>
+      <MarketDetailsDrawer
+        marketId={selectedMarketId}
+        isOpen={isDetailsOpen}
+        onClose={() => setIsDetailsOpen(false)}
+        isDark={isDark}
+      />
     </section>
   );
 }

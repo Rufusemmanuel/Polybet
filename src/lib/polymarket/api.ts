@@ -3,7 +3,7 @@
 import { POLYMARKET_CONFIG } from '../config';
 import { getTopOfBook } from './clob';
 import { resolveCategory } from './category';
-import type { MarketPrice, MarketSummary, OutcomeSide, RawEvent, RawMarket } from './types';
+import type { MarketDetailsResponse, MarketPrice, MarketSummary, OutcomeSide, RawEvent, RawMarket } from './types';
 
 const fetchJson = async <T>(url: string): Promise<T> => {
   const res = await fetch(url, { next: { revalidate: 0 } });
@@ -40,6 +40,28 @@ const parseOutcomePrices = (outcomes?: string, outcomePrices?: string): MarketPr
     leadingOutcome: (labels[maxIdx] ?? 'Yes') as OutcomeSide,
     price: numeric[maxIdx],
   };
+};
+
+const normalizeToText = (value: unknown): string | null => {
+  if (typeof value === 'string') return value.trim() || null;
+  if (Array.isArray(value)) {
+    const cleaned = value.map((item) => String(item).trim()).filter(Boolean);
+    return cleaned.length ? cleaned.join('\n') : null;
+  }
+  return null;
+};
+
+const collectTagLabels = (market: RawMarket): string[] => {
+  const labels: string[] = [];
+  for (const tag of market.tags ?? []) {
+    if (tag.label) labels.push(tag.label);
+  }
+  for (const event of market.events ?? []) {
+    for (const tag of event.tags ?? []) {
+      if (tag.label) labels.push(tag.label);
+    }
+  }
+  return labels;
 };
 
 export const getActiveMarkets = async (): Promise<MarketSummary[]> => {
@@ -186,6 +208,69 @@ export const getMarketDetails = async (
     console.error('[PolyPicks] getTopOfBook error', { marketId: market.id, tokenId, error });
     return base;
   }
+};
+
+export const getMarketDetailsPayload = async (
+  marketId: string,
+): Promise<MarketDetailsResponse | null> => {
+  const url = `${POLYMARKET_CONFIG.gammaBaseUrl}/markets/${marketId}`;
+  const market = await fetchJson<RawMarket>(url);
+
+  if (!market) return null;
+
+  const price =
+    parseOutcomePrices(market.outcomes, market.outcomePrices) ??
+    (market.bestBid
+      ? { leadingOutcome: 'Yes' as OutcomeSide, price: Number(market.bestBid) }
+      : null);
+  if (!price) return null;
+
+  const eventSlug = market.events?.[0]?.slug ?? market.slug;
+  const marketUrl =
+    eventSlug && market.conditionId
+      ? `${POLYMARKET_CONFIG.marketPageBase}${eventSlug}?tid=${market.conditionId}`
+      : `${POLYMARKET_CONFIG.marketPageBase}${eventSlug ?? ''}`;
+
+  const description =
+    normalizeToText(market.description) ??
+    normalizeToText(market.events?.[0]?.description) ??
+    normalizeToText(market.events?.[0]?.title);
+
+  const resolutionRules =
+    normalizeToText(market.resolutionRules) ??
+    normalizeToText(market.rules) ??
+    normalizeToText(market.resolutionCriteria) ??
+    normalizeToText(market.marketRules);
+
+  const tagLabels = collectTagLabels(market);
+  const currentProb = price.price;
+
+  return {
+    id: market.id,
+    title: market.question ?? market.title ?? market.slug,
+    slug: market.slug,
+    categoryResolved: resolveCategory(market),
+    directCategory: market.category ?? null,
+    tags: tagLabels,
+    volume: Number(market.volume ?? market.volumeNum ?? 0),
+    closesAt: market.endDate,
+    leading: {
+      outcome: price.leadingOutcome,
+      price: price.price,
+      prob: currentProb,
+    },
+    about: {
+      description,
+      resolution: resolutionRules,
+      sourceUrl: marketUrl,
+    },
+    highConfidence: {
+      min: 0.75,
+      max: 0.95,
+      currentProb,
+      whyText: 'Shown because implied probability is between 75% and 95%.',
+    },
+  };
 };
 
 export const getResolvedStatus = async (marketId: string): Promise<{

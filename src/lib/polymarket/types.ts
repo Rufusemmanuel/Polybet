@@ -36,6 +36,11 @@ export type RawMarket = {
   id: string;
   question: string;
   title?: string;
+  description?: string;
+  rules?: string;
+  resolutionRules?: string;
+  resolutionCriteria?: string;
+  marketRules?: string;
   slug: string;
   category?: string;
 
@@ -49,6 +54,8 @@ export type RawMarket = {
   events?: {
     slug?: string; // 👈 this is what fixes your TypeScript error
     category?: string;
+    title?: string;
+    description?: string;
     tags?: {
       label: string;
       slug: string;
@@ -105,4 +112,53 @@ export type HistoryEntryDto = {
   resolvedAt: string;
   closedAt?: string | null;
   marketUrl: string;
+};
+
+export type MarketDetailsResponse = {
+  id: string;
+  title: string;
+  slug: string;
+  categoryResolved: string;
+  directCategory?: string | null;
+  tags?: string[];
+  volume: number;
+  closesAt: string;
+  leading: { outcome: string; price: number; prob: number };
+  about: { description?: string | null; resolution?: string | null; sourceUrl?: string | null };
+  highConfidence: { min: number; max: number; currentProb: number; whyText: string };
+  sports?: SportsEnrichment;
+};
+
+export type SportsMatch = {
+  utcDate: string;
+  competition?: string | null;
+  homeTeam: string;
+  awayTeam: string;
+  homeScore: number | null;
+  awayScore: number | null;
+};
+
+export type SportsStandings = {
+  competition: string;
+  table: {
+    position: number;
+    team: string;
+    playedGames: number;
+    points: number;
+  }[];
+};
+
+export type SportsEnrichment = {
+  matchup: {
+    teamA: string;
+    teamB: string;
+    teamAId?: number;
+    teamBId?: number;
+    crestA?: string | null;
+    crestB?: string | null;
+  };
+  recentA: SportsMatch[];
+  recentB: SportsMatch[];
+  headToHead: SportsMatch[];
+  standings?: SportsStandings | null;
 };
