@@ -4,6 +4,7 @@ import {
   isSoccerMarket,
   parseMatchupFromTitle,
   parseSingleTeamWinFromTitle,
+  parseTeamFromSpreadTitle,
   resolveCompetitionCandidates,
 } from '../src/lib/sports/providers/football-data';
 
@@ -23,6 +24,14 @@ const cases = [
   {
     title: 'Team A vs. Team B (International Friendly)',
     expected: { teamA: 'Team A', teamB: 'Team B' },
+  },
+  {
+    title: 'Will Liverpool FC vs. Wolverhampton Wanderers FC end in a draw?',
+    expected: { teamA: 'Liverpool FC', teamB: 'Wolverhampton Wanderers FC' },
+  },
+  {
+    title: 'Will Arsenal FC vs. Brighton & Hove Albion FC end in a draw?',
+    expected: { teamA: 'Arsenal FC', teamB: 'Brighton & Hove Albion FC' },
   },
 ];
 
@@ -57,6 +66,23 @@ for (const testCase of singleTeamCases) {
   assert.ok(actual, testCase.title);
   assert.equal(actual?.team, testCase.expected.team, testCase.title);
   assert.equal(actual?.date, testCase.expected.date, testCase.title);
+}
+
+const spreadCases = [
+  {
+    title: 'Spread: SS Lazio (-1.5)',
+    expected: { team: 'SS Lazio' },
+  },
+  {
+    title: 'Handicap: Arsenal FC (+0.5)',
+    expected: { team: 'Arsenal FC' },
+  },
+];
+
+for (const testCase of spreadCases) {
+  const actual = parseTeamFromSpreadTitle(testCase.title);
+  assert.ok(actual, testCase.title);
+  assert.equal(actual?.team, testCase.expected.team, testCase.title);
 }
 
 const competitionCases = [
@@ -121,5 +147,5 @@ for (const testCase of soccerGateCases) {
 }
 
 console.log(
-  `Matchup parse harness passed (${cases.length + singleTeamCases.length + competitionCases.length + soccerGateCases.length} cases).`,
+  `Matchup parse harness passed (${cases.length + singleTeamCases.length + spreadCases.length + competitionCases.length + soccerGateCases.length} cases).`,
 );

@@ -33,18 +33,6 @@ type CompetitionMatchesResponse = {
   matches: MatchResponse['matches'];
 };
 
-type StandingsResponse = {
-  competition?: { name?: string };
-  standings?: {
-    type?: string;
-    table?: {
-      position?: number;
-      team?: { name?: string };
-      playedGames?: number;
-      points?: number;
-    }[];
-  }[];
-};
 
 export type FootballTeam = {
   id: number;
@@ -64,15 +52,6 @@ export type FootballMatch = {
   awayScore: number | null;
 };
 
-export type FootballStandings = {
-  competition: string;
-  table: {
-    position: number;
-    team: string;
-    playedGames: number;
-    points: number;
-  }[];
-};
 
 const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
 const API_KEY = process.env.FOOTBALL_DATA_API_KEY;
@@ -126,6 +105,10 @@ const hasSlugToken = (slug: string, token: string) =>
   new RegExp(`(^|-)${token}(-|$)`, 'i').test(slug);
 
 export const normalizeTeamName = (name: string) => {
+  const aliases: Record<string, string> = {
+    wolves: 'wolverhampton wanderers',
+    brighton: 'brighton and hove albion',
+  };
   const abbreviations: Record<string, string> = {
     utd: 'united',
     nottm: 'nottingham',
@@ -133,12 +116,29 @@ export const normalizeTeamName = (name: string) => {
     dep: 'deportivo',
     ath: 'athletic',
   };
-  const tokens = normalizeName(name)
+  const base = normalizeName(name).replace(/&/g, ' and ');
+  const normalizedBase = normalizeName(base);
+  const alias = aliases[normalizedBase];
+  const tokens = (alias ?? normalizedBase)
     .split(' ')
     .map((token) => abbreviations[token] ?? token)
     .filter(
       (token) =>
-        token && !['fc', 'sc', 'cf', 'afc', 'the', 'club', 'ud', 'cd', 'cf'].includes(token),
+        token &&
+        ![
+          'fc',
+          'sc',
+          'cf',
+          'afc',
+          'the',
+          'club',
+          'ud',
+          'cd',
+          'ss',
+          'ac',
+          'as',
+          'calcio',
+        ].includes(token),
     );
   return tokens.join(' ').trim();
 };
@@ -189,15 +189,29 @@ const bestTeamMatch = (
 export const parseMatchupFromTitle = (
   title: string,
 ): { teamA: string; teamB: string } | null => {
-  if (!title || /^will\s/i.test(title)) return null;
+  if (!title) return null;
+  const drawMatch = title.match(
+    /^Will\s+(.+?)\s+(?:vs\.?|v|@)\s+(.+?)\s+end\s+in\s+a\s+draw\??$/i,
+  );
+  if (drawMatch) {
+    const teamA = drawMatch[1]?.trim().replace(/[?)]$/, '');
+    const teamB = drawMatch[2]?.trim().replace(/[?)]$/, '');
+    if (teamA && teamB && teamA.length >= 2 && teamB.length >= 2) {
+      return { teamA, teamB };
+    }
+  }
   const cleaned = title
     .split(':')[0]
     ?.split(' - ')[0]
     ?.split('(')[0]
+    ?.replace(/^Will\s+/i, '')
+    ?.replace(/\s+end\s+in\s+a\s+draw\??$/i, '')
+    ?.replace(/\s+end\s+in\s+a\s+tie\??$/i, '')
     ?.replace(/\bO\/U\b.*$/i, '')
     ?.replace(/\bOver\/Under\b.*$/i, '')
     ?.replace(/\bTotals?\b.*$/i, '')
     ?.replace(/\bSpread\b.*$/i, '')
+    ?.replace(/\bHandicap\b.*$/i, '')
     ?.trim();
   if (!cleaned) return null;
 
@@ -246,6 +260,24 @@ export const parseSingleTeamWinFromTitle = (
   return { team, date };
 };
 
+export const parseTeamFromSpreadTitle = (
+  title: string,
+): { team: string } | null => {
+  if (!title) return null;
+  const match = title.match(
+    /^(?:Spread|Handicap)\s*:\s*(.+?)\s*\(([-+]?[\d.]+)\)\s*$/i,
+  );
+  if (!match) return null;
+  const teamRaw = match[1]?.trim();
+  if (!teamRaw) return null;
+  const team = teamRaw
+    .replace(/\([^)]*\)\s*$/, '')
+    .replace(/[?)]$/, '')
+    .replace(/\s+\b(?:total|spread|handicap|over\/under|o\/u)\b.*$/i, '')
+    .trim();
+  if (!team || team.length < 2) return null;
+  return { team };
+};
 const pickBestTeam = (teams: TeamSearchResponse['teams'], query: string) =>
   bestTeamMatch(teams, query);
 
@@ -311,28 +343,6 @@ export const getHeadToHead = async (
   return response.matches.slice(0, limit).map(toFootballMatch);
 };
 
-export const getStandings = async (
-  competitionCode: string,
-): Promise<FootballStandings | null> => {
-  const response = await fetchFootballData<StandingsResponse>(
-    `/competitions/${competitionCode}/standings`,
-  );
-  if (!response) return null;
-  const tables = response.standings ?? [];
-  const table = tables.find((standing) => standing.type === 'TOTAL') ?? tables[0];
-  const rows = table?.table ?? [];
-  if (!rows.length) return null;
-
-  return {
-    competition: response.competition?.name ?? 'League standings',
-    table: rows.map((row) => ({
-      position: row.position ?? 0,
-      team: row.team?.name ?? 'Unknown',
-      playedGames: row.playedGames ?? 0,
-      points: row.points ?? 0,
-    })),
-  };
-};
 
 const tokenMatches = (queryToken: string, candidateToken: string) => {
   if (queryToken === candidateToken) return true;

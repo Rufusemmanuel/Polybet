@@ -234,15 +234,15 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                   <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
                     {details.sportsMeta?.reason === 'missing_api_key'
                       ? 'Set FOOTBALL_DATA_API_KEY in .env.local / Vercel env vars to enable soccer stats.'
+                      : details.sportsMeta?.reason === 'matchup_parse_failed'
+                        ? 'Could not parse team name(s) from this market title.'
                       : details.sportsMeta?.reason === 'fixture_not_found'
                         ? "Couldn't find the scheduled fixture for this team on that date."
-                        : details.sportsMeta?.reason === 'matchup_parse_failed'
-                          ? 'Could not parse team name(s) from this market title.'
-                          : details.sportsMeta?.reason === 'rate_limited'
-                            ? 'Soccer stats are temporarily rate limited. Please try again shortly.'
-                            : details.sportsMeta?.reason === 'upstream_error'
-                              ? 'Soccer stats are unavailable due to an upstream error. Please try again.'
-                        : 'Stats currently supported for soccer markets only.'}
+                        : details.sportsMeta?.reason === 'rate_limited'
+                          ? 'Soccer stats are temporarily rate limited. Please try again shortly.'
+                          : details.sportsMeta?.reason === 'upstream_error'
+                            ? 'Soccer stats are unavailable due to an upstream error. Please try again.'
+                            : 'Stats currently supported for soccer markets only.'}
                   </p>
                 )}
                 {details.sports && (
@@ -306,21 +306,6 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                             <li key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}>
                               {match.homeTeam} {match.homeScore ?? '-'} -{' '}
                               {match.awayScore ?? '-'} {match.awayTeam}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                    {details.sports.standings && (
-                      <div>
-                        <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
-                          {details.sports.standings.competition}
-                        </p>
-                        <ul className="space-y-1 text-sm">
-                          {details.sports.standings.table.map((row) => (
-                            <li key={row.team}>
-                              {row.position}. {row.team} - {row.points} pts ({row.playedGames}{' '}
-                              played)
                             </li>
                           ))}
                         </ul>

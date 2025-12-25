@@ -148,16 +148,6 @@ export type SportsMatch = {
   awayScore: number | null;
 };
 
-export type SportsStandings = {
-  competition: string;
-  table: {
-    position: number;
-    team: string;
-    playedGames: number;
-    points: number;
-  }[];
-};
-
 export type SportsEnrichment = {
   matchup: {
     teamA: string;
@@ -170,5 +160,4 @@ export type SportsEnrichment = {
   recentA: SportsMatch[];
   recentB: SportsMatch[];
   headToHead: SportsMatch[];
-  standings?: SportsStandings | null;
 };

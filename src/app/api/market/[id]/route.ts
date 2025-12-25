@@ -5,11 +5,11 @@ import {
   findFixtureMatch,
   getHeadToHead,
   getRecentMatches,
-  getStandings,
   getTeamDetails,
   isAmericanLeagueMarket,
   isFootballDataConfigured,
   parseMatchupFromTitle,
+  parseTeamFromSpreadTitle,
   parseSingleTeamWinFromTitle,
   resolveOpponentFromFixtures,
   resolveCompetitionCandidates,
@@ -33,10 +33,19 @@ export async function GET(_: Request, { params }: Params) {
       reason: 'not_soccer',
     };
     const matchup = parseMatchupFromTitle(market.title);
-    const singleTeam = matchup ? null : parseSingleTeamWinFromTitle(market.title);
+    const singleTeam = matchup
+      ? null
+      : parseSingleTeamWinFromTitle(market.title) ?? parseTeamFromSpreadTitle(market.title);
     const slugDate = market.slug.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+    const singleTeamDate =
+      singleTeam &&
+      'date' in singleTeam &&
+      typeof singleTeam.date === 'string' &&
+      singleTeam.date
+        ? singleTeam.date
+        : null;
     const titleDate =
-      singleTeam?.date ?? market.title.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+      singleTeamDate ?? market.title.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
     const closesAtDate = new Date(market.closesAt);
     const fallbackDate = Number.isNaN(closesAtDate.getTime())
       ? null
@@ -99,15 +108,13 @@ export async function GET(_: Request, { params }: Params) {
           }
 
           if (fixture) {
-            const standingsCode = fixture.competitionCode ?? competitionCode;
-            const [recentA, recentB, headToHead, detailsA, detailsB, standings] =
+            const [recentA, recentB, headToHead, detailsA, detailsB] =
               await Promise.all([
                 getRecentMatches(fixture.homeTeamId, 5),
                 getRecentMatches(fixture.awayTeamId, 5),
                 getHeadToHead(fixture.matchId, 5),
                 getTeamDetails(fixture.homeTeamId),
                 getTeamDetails(fixture.awayTeamId),
-                standingsCode ? getStandings(standingsCode) : Promise.resolve(null),
               ]);
 
             sports = {
@@ -122,7 +129,6 @@ export async function GET(_: Request, { params }: Params) {
               recentA,
               recentB,
               headToHead,
-              standings,
             };
             sportsMeta = { enabled: true };
           } else {
