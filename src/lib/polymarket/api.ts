@@ -2,6 +2,7 @@
 
 import { POLYMARKET_CONFIG } from '../config';
 import { getTopOfBook } from './clob';
+import { resolveCategory } from './category';
 import type { MarketPrice, MarketSummary, OutcomeSide, RawEvent, RawMarket } from './types';
 
 const fetchJson = async <T>(url: string): Promise<T> => {
@@ -39,38 +40,6 @@ const parseOutcomePrices = (outcomes?: string, outcomePrices?: string): MarketPr
     leadingOutcome: (labels[maxIdx] ?? 'Yes') as OutcomeSide,
     price: numeric[maxIdx],
   };
-};
-
-// Very simple slug → category guesser used only when Polymarket
-// doesn’t give us a category or tag.
-const inferCategoryFromSlug = (slug?: string): string | undefined => {
-  if (!slug) return undefined;
-  const s = slug.toLowerCase();
-
-  if (s.includes('btc') || s.includes('bitcoin') || s.includes('eth') || s.includes('ethereum')) {
-    return 'Crypto';
-  }
-  if (s.includes('election') || s.includes('president') || s.includes('vote')) {
-    return 'Politics';
-  }
-  if (s.includes('gdp') || s.includes('inflation') || s.includes('rate') || s.includes('fed')) {
-    return 'Economy';
-  }
-  if (s.includes('nfl') || s.includes('nba') || s.includes('premier-league') || s.includes('f1')) {
-    return 'Sports';
-  }
-
-  return undefined;
-};
-
-const resolveCategory = (market: RawMarket): string => {
-  const direct = market.category?.trim();
-  const tag =
-    market.tags?.[0]?.label?.trim() ??
-    market.events?.[0]?.tags?.[0]?.label?.trim();
-  const slugGuess = direct || tag ? undefined : inferCategoryFromSlug(market.slug);
-
-  return (direct || tag || slugGuess || 'Uncategorized').replace(/-/g, ' ');
 };
 
 export const getActiveMarkets = async (): Promise<MarketSummary[]> => {

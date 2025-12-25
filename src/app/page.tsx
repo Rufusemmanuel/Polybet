@@ -67,7 +67,9 @@ function mapToSubdivision(market: MarketWithStrings): Subdivision {
     category.includes('bitcoin') ||
     category.includes('eth') ||
     category.includes('solana') ||
-    category.includes('ethereum')
+    category.includes('ethereum') ||
+    category.includes('xrp') ||
+    category.includes('ripple')
   ) {
     return 'Crypto';
   }

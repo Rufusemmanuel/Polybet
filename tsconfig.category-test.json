@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node"],
+    "outDir": ".tmp-category-test"
+  },
+  "include": [
+    "scripts/category-harness.ts",
+    "src/lib/polymarket/category.ts",
+    "src/lib/polymarket/types.ts"
+  ]
+}
