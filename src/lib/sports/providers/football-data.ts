@@ -63,6 +63,9 @@ let rateLimitHit = false;
 
 type QueryParams = Record<string, string | number | undefined>;
 
+const normalizeCompetitionCode = (code?: string | null) =>
+  code ? code.trim().toUpperCase() : null;
+
 const buildQuery = (params: QueryParams): string => {
   const entries = Object.entries(params).filter(([, value]) => value != null);
   if (!entries.length) return '';
@@ -455,7 +458,9 @@ export const findFixtureMatch = async (
     matchId: best.id,
     utcDate: best.utcDate,
     competition: best.competition?.name ?? null,
-    competitionCode: best.competition?.code ?? competitionCode ?? null,
+    competitionCode: normalizeCompetitionCode(
+      best.competition?.code ?? competitionCode ?? null,
+    ),
     homeTeamId: best.homeTeam.id,
     awayTeamId: best.awayTeam.id,
     homeTeamName: best.homeTeam.name,
@@ -496,7 +501,9 @@ export const findFixtureForSingleTeam = async (
     matchId: best.id,
     utcDate: best.utcDate,
     competition: best.competition?.name ?? null,
-    competitionCode: best.competition?.code ?? competitionCode ?? null,
+    competitionCode: normalizeCompetitionCode(
+      best.competition?.code ?? competitionCode ?? null,
+    ),
     homeTeamId: best.homeTeam.id,
     awayTeamId: best.awayTeam.id,
     homeTeamName: best.homeTeam.name,
@@ -538,7 +545,9 @@ export const findFixtureForSingleTeamWithReason = async (
       matchId: best.id,
       utcDate: best.utcDate,
       competition: best.competition?.name ?? null,
-      competitionCode: best.competition?.code ?? competitionCode ?? null,
+      competitionCode: normalizeCompetitionCode(
+        best.competition?.code ?? competitionCode ?? null,
+      ),
       homeTeamId: best.homeTeam.id,
       awayTeamId: best.awayTeam.id,
       homeTeamName: best.homeTeam.name,
@@ -564,9 +573,9 @@ const competitionTokenMap: Record<string, string> = {
   'primeira-liga': 'PPL',
   'liga-nos': 'PPL',
   championship: 'ELC',
+  'league-one': 'EL1',
+  'league-two': 'EL2',
   'fa-cup': 'FAC',
-  'efl-cup': 'EFL',
-  carabao: 'EFL',
   'copa-del-rey': 'CDR',
   'coppa-italia': 'CIT',
   'world-cup': 'WC',
@@ -584,8 +593,9 @@ const FOOTBALL_DATA_ALLOWLIST = new Set([
   'DED',
   'PPL',
   'ELC',
+  'EL1',
+  'EL2',
   'FAC',
-  'EFL',
   'CDR',
   'CIT',
   'WC',
@@ -606,11 +616,14 @@ export const resolveCompetitionCandidates = (slug: string, title: string): strin
   for (const [token, code] of Object.entries(competitionTokenMap)) {
     if (hasTitleToken(title, token)) candidates.push(code);
   }
-  return Array.from(new Set(candidates)).filter((code) => FOOTBALL_DATA_ALLOWLIST.has(code));
+  return Array.from(new Set(candidates))
+    .map((code) => normalizeCompetitionCode(code))
+    .filter((code): code is string => Boolean(code))
+    .filter((code) => FOOTBALL_DATA_ALLOWLIST.has(code));
 };
 
 export const resolveCompetitionCode = (slug: string) =>
-  resolveCompetitionCandidates(slug, '')[0] ?? null;
+  normalizeCompetitionCode(resolveCompetitionCandidates(slug, '')[0] ?? null);
 
 export const isLikelyCountryTeam = (name: string) => {
   const normalized = normalizeName(name);

@@ -6,6 +6,7 @@ import {
   parseMatchupFromTitle,
   parseSingleTeamWinFromTitle,
   parseTeamFromSpreadTitle,
+  resolveCompetitionCode,
   resolveCompetitionCandidates,
 } from '../src/lib/sports/providers/football-data';
 
@@ -156,6 +157,31 @@ for (const testCase of competitionCases) {
   }
 }
 
+const competitionNormalizationCases = [
+  {
+    slug: 'elc-cov-swa-2025-12-26-draw',
+    expected: 'ELC',
+  },
+  {
+    slug: 'el1-oxf-foo-2025-12-26',
+    expected: 'EL1',
+  },
+  {
+    slug: 'sea-udi-laz-2025-12-27-spread-away-1pt5',
+    expected: 'SA',
+  },
+];
+
+for (const testCase of competitionNormalizationCases) {
+  const candidates = resolveCompetitionCandidates(testCase.slug, '');
+  assert.ok(
+    candidates.includes(testCase.expected),
+    `${testCase.slug} expected ${testCase.expected} in ${candidates.join(', ')}`,
+  );
+  const resolved = resolveCompetitionCode(testCase.slug);
+  assert.equal(resolved, testCase.expected, `${testCase.slug} resolveCompetitionCode`);
+}
+
 const soccerGateCases = [
   {
     title: 'Manchester United FC vs. Newcastle United FC: O/U 1.5',
@@ -179,5 +205,5 @@ for (const testCase of soccerGateCases) {
 }
 
 console.log(
-  `Matchup parse harness passed (${cases.length + singleTeamCases.length + spreadCases.length + competitionCases.length + soccerGateCases.length} cases).`,
+  `Matchup parse harness passed (${cases.length + singleTeamCases.length + spreadCases.length + competitionCases.length + competitionNormalizationCases.length + soccerGateCases.length} cases).`,
 );

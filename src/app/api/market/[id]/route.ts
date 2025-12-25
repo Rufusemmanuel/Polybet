@@ -75,10 +75,20 @@ export async function GET(_: Request, { params }: Params) {
         sportsMeta = { enabled: false, reason: 'missing_api_key' };
       } else {
         consumeRateLimitSignal();
-        const competitionCandidates = resolveCompetitionCandidates(market.slug, market.title);
+        let competitionCandidates = resolveCompetitionCandidates(market.slug, market.title);
         const competitionCode = resolveCompetitionCode(market.slug);
         const isCountryTeam =
           Boolean(singleTeam && isLikelyCountryTeam(singleTeam.team)) || nationalCompetitionToken;
+        if (!competitionCandidates.length) {
+          if (/\b(elc|championship)\b/i.test(market.slug)) {
+            competitionCandidates = ['ELC'];
+          } else if (/\b(league-one|el1)\b/i.test(market.slug)) {
+            competitionCandidates = ['EL1'];
+          } else if (/\b(league-two|el2)\b/i.test(market.slug)) {
+            competitionCandidates = ['EL2'];
+          }
+        }
+
         if (!competitionCandidates.length && !competitionCode) {
           sportsMeta = {
             enabled: false,
