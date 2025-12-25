@@ -20,12 +20,17 @@ type TeamDetailsResponse = {
 
 type MatchResponse = {
   matches: {
+    id: number;
     utcDate: string;
     competition?: { name?: string };
     score?: { fullTime?: { home?: number | null; away?: number | null } };
     homeTeam: { id: number; name: string };
     awayTeam: { id: number; name: string };
   }[];
+};
+
+type CompetitionMatchesResponse = {
+  matches: MatchResponse['matches'];
 };
 
 type StandingsResponse = {
@@ -98,6 +103,7 @@ const fetchFootballData = async <T>(
       },
       next: { revalidate: CACHE_REVALIDATE_SECONDS },
     });
+    if (res.status === 429) return null;
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -121,6 +127,8 @@ export const normalizeTeamName = (name: string) => {
     .filter((token) => token && !['fc', 'sc', 'cf', 'afc', 'the', 'club'].includes(token));
   return tokens.join(' ').trim();
 };
+
+export const isFootballDataConfigured = () => Boolean(API_KEY);
 
 const scoreTeamMatch = (team: TeamSearchResponse['teams'][number], query: string): number => {
   const normalizedQuery = normalizeTeamName(query);
@@ -238,25 +246,20 @@ export const getRecentMatches = async (
 };
 
 export const getHeadToHead = async (
-  teamAId: number,
-  teamBId: number,
+  matchId: number,
   limit = 5,
 ): Promise<FootballMatch[]> => {
-  const response = await fetchFootballData<MatchResponse>(`/teams/${teamAId}/matches`, {
-    status: 'FINISHED',
-    limit: 40,
-  });
+  const response = await fetchFootballData<MatchResponse>(`/matches/${matchId}/head2head`);
   if (!response?.matches) return [];
-  const filtered = response.matches.filter(
-    (match) => match.homeTeam.id === teamBId || match.awayTeam.id === teamBId,
-  );
-  return filtered.slice(0, limit).map(toFootballMatch);
+  return response.matches.slice(0, limit).map(toFootballMatch);
 };
 
 export const getStandings = async (
-  competitionId: number,
+  competitionCode: string,
 ): Promise<FootballStandings | null> => {
-  const response = await fetchFootballData<StandingsResponse>(`/competitions/${competitionId}/standings`);
+  const response = await fetchFootballData<StandingsResponse>(
+    `/competitions/${competitionCode}/standings`,
+  );
   if (!response) return null;
   const tables = response.standings ?? [];
   const table = tables.find((standing) => standing.type === 'TOTAL') ?? tables[0];
@@ -274,10 +277,113 @@ export const getStandings = async (
   };
 };
 
+const tokenMatches = (queryToken: string, candidateToken: string) => {
+  if (queryToken === candidateToken) return true;
+  if (queryToken.length < 3 || candidateToken.length < 3) return false;
+  return queryToken.startsWith(candidateToken) || candidateToken.startsWith(queryToken);
+};
+
+const scoreNameMatch = (query: string, candidate: string): number => {
+  const normalizedQuery = normalizeTeamName(query);
+  const normalizedCandidate = normalizeTeamName(candidate);
+  if (!normalizedQuery || !normalizedCandidate) return 0;
+  if (normalizedQuery === normalizedCandidate) return 100;
+  if (
+    normalizedCandidate.includes(normalizedQuery) ||
+    normalizedQuery.includes(normalizedCandidate)
+  ) {
+    return 90;
+  }
+
+  const queryTokens = normalizedQuery.split(' ').filter(Boolean);
+  const candidateTokens = normalizedCandidate.split(' ').filter(Boolean);
+  if (!queryTokens.length || !candidateTokens.length) return 0;
+
+  let overlap = 0;
+  for (const queryToken of queryTokens) {
+    if (candidateTokens.some((candidateToken) => tokenMatches(queryToken, candidateToken))) {
+      overlap += 1;
+    }
+  }
+  if (!overlap) return 0;
+  const ratio = overlap / Math.max(queryTokens.length, candidateTokens.length);
+  return Math.round(ratio * 70);
+};
+
+export type FixtureMatch = {
+  matchId: number;
+  utcDate: string;
+  competition?: string | null;
+  homeTeamId: number;
+  awayTeamId: number;
+  homeTeamName: string;
+  awayTeamName: string;
+};
+
+export const findFixtureMatch = async (
+  competitionCode: string,
+  matchDate: string,
+  teamA: string,
+  teamB: string,
+): Promise<FixtureMatch | null> => {
+  const response = await fetchFootballData<CompetitionMatchesResponse>(
+    `/competitions/${competitionCode}/matches`,
+    { dateFrom: matchDate, dateTo: matchDate },
+  );
+  if (!response?.matches?.length) return null;
+
+  let best: MatchResponse['matches'][number] | null = null;
+  let bestScore = 0;
+
+  for (const match of response.matches) {
+    const homeScore = scoreNameMatch(teamA, match.homeTeam.name);
+    const awayScore = scoreNameMatch(teamB, match.awayTeam.name);
+    const swapScore =
+      scoreNameMatch(teamA, match.awayTeam.name) +
+      scoreNameMatch(teamB, match.homeTeam.name);
+    const score = Math.max(homeScore + awayScore, swapScore);
+    if (score > bestScore) {
+      bestScore = score;
+      best = match;
+    }
+  }
+
+  if (!best || bestScore < 120) return null;
+
+  return {
+    matchId: best.id,
+    utcDate: best.utcDate,
+    competition: best.competition?.name ?? null,
+    homeTeamId: best.homeTeam.id,
+    awayTeamId: best.awayTeam.id,
+    homeTeamName: best.homeTeam.name,
+    awayTeamName: best.awayTeam.name,
+  };
+};
+
+export const resolveCompetitionCode = (slug: string) => {
+  const lowerSlug = slug.toLowerCase();
+  const mapping: Record<string, string> = {
+    epl: 'PL',
+    'premier-league': 'PL',
+    ucl: 'CL',
+    'champions-league': 'CL',
+    bundesliga: 'BL1',
+    'la-liga': 'PD',
+    'serie-a': 'SA',
+    'ligue-1': 'FL1',
+    eredivisie: 'DED',
+    'primeira-liga': 'PPL',
+  };
+
+  for (const token of Object.keys(mapping)) {
+    if (hasSlugToken(lowerSlug, token)) return mapping[token];
+  }
+  return null;
+};
+
 export const isSoccerMarket = (title: string, slug: string, tags?: string[]) => {
   const lowerSlug = slug.toLowerCase();
-  const lowerTitle = title.toLowerCase();
-  const lowerTags = (tags ?? []).map((tag) => tag.toLowerCase());
   const slugTokens = [
     'epl',
     'premier-league',
@@ -287,27 +393,15 @@ export const isSoccerMarket = (title: string, slug: string, tags?: string[]) => 
     'la-liga',
     'serie-a',
     'ligue-1',
-    'fifa',
-    'uefa',
-    'afcon',
-    'world-cup',
-    'soccer',
-    'football',
+    'eredivisie',
+    'primeira-liga',
   ];
-  const slugHit = slugTokens.some((token) => hasSlugToken(lowerSlug, token));
-  const tagHit = lowerTags.some((tag) => tag.includes('soccer') || tag.includes('football'));
-  return slugHit || tagHit || lowerTitle.includes('football') || lowerTitle.includes('soccer');
+  return slugTokens.some((token) => hasSlugToken(lowerSlug, token));
 };
 
 export const isAmericanLeagueMarket = (title: string, slug: string) => {
   const lowerSlug = slug.toLowerCase();
-  const lowerTitle = title.toLowerCase();
   const slugTokens = ['nfl', 'nba', 'mlb', 'nhl'];
   if (slugTokens.some((token) => hasSlugToken(lowerSlug, token))) return true;
-  return (
-    /\bnfl\b/i.test(lowerTitle) ||
-    /\bnba\b/i.test(lowerTitle) ||
-    /\bmlb\b/i.test(lowerTitle) ||
-    /\bnhl\b/i.test(lowerTitle)
-  );
+  return false;
 };

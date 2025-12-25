@@ -42,6 +42,12 @@ const soccerGateCases = [
     expectSoccer: true,
     expectAmerican: false,
   },
+  {
+    title: 'Dallas Cowboys vs. Washington Commanders',
+    slug: 'nfl-dal-was-2025-12-25',
+    expectSoccer: false,
+    expectAmerican: true,
+  },
 ];
 
 for (const testCase of soccerGateCases) {

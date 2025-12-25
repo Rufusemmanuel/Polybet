@@ -127,6 +127,10 @@ export type MarketDetailsResponse = {
   about: { description?: string | null; resolution?: string | null; sourceUrl?: string | null };
   highConfidence: { min: number; max: number; currentProb: number; whyText: string };
   sports?: SportsEnrichment;
+  sportsMeta?: {
+    enabled: boolean;
+    reason?: 'missing_api_key' | 'fixture_not_found' | 'not_soccer';
+  };
 };
 
 export type SportsMatch = {

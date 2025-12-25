@@ -1,14 +1,16 @@
 import { NextResponse } from 'next/server';
 import { getMarketDetailsPayload } from '@/lib/polymarket/api';
 import {
+  findFixtureMatch,
   getHeadToHead,
   getRecentMatches,
   getStandings,
   getTeamDetails,
   isAmericanLeagueMarket,
+  isFootballDataConfigured,
   isSoccerMarket,
   parseMatchupFromTitle,
-  searchTeamByName,
+  resolveCompetitionCode,
 } from '@/lib/sports/providers/football-data';
 import type { MarketDetailsResponse, SportsEnrichment } from '@/lib/polymarket/types';
 
@@ -22,52 +24,71 @@ export async function GET(_: Request, { params }: Params) {
     }
 
     let sports: SportsEnrichment | undefined;
-    if (
+    let sportsMeta: MarketDetailsResponse['sportsMeta'] = {
+      enabled: false,
+      reason: 'not_soccer',
+    };
+    const soccerLikely =
       market.categoryResolved === 'Sports' &&
       isSoccerMarket(market.title, market.slug, market.tags) &&
-      !isAmericanLeagueMarket(market.title, market.slug)
-    ) {
-      const matchup = parseMatchupFromTitle(market.title);
-      if (matchup) {
-        try {
-          const [teamA, teamB] = await Promise.all([
-            searchTeamByName(matchup.teamA),
-            searchTeamByName(matchup.teamB),
-          ]);
+      !isAmericanLeagueMarket(market.title, market.slug);
+    if (soccerLikely) {
+      if (!isFootballDataConfigured()) {
+        sportsMeta = { enabled: false, reason: 'missing_api_key' };
+      } else {
+        const matchup = parseMatchupFromTitle(market.title);
+        const competitionCode = resolveCompetitionCode(market.slug);
+        const slugDate = market.slug.match(/\d{4}-\d{2}-\d{2}/)?.[0] ?? null;
+        const closesAtDate = new Date(market.closesAt);
+        const fallbackDate = Number.isNaN(closesAtDate.getTime())
+          ? null
+          : closesAtDate.toISOString().slice(0, 10);
+        const matchDate = slugDate ?? fallbackDate;
 
-          if (teamA && teamB) {
-            const [recentA, recentB, headToHead, detailsA, detailsB] = await Promise.all([
-              getRecentMatches(teamA.id, 5),
-              getRecentMatches(teamB.id, 5),
-              getHeadToHead(teamA.id, teamB.id, 5),
-              getTeamDetails(teamA.id),
-              getTeamDetails(teamB.id),
-            ]);
-
-            const compsA = detailsA?.runningCompetitions ?? [];
-            const compsB = detailsB?.runningCompetitions ?? [];
-            const shared = compsA.find((comp) =>
-              compsB.some((other) => other.id === comp.id),
+        if (matchup && competitionCode && matchDate) {
+          try {
+            const fixture = await findFixtureMatch(
+              competitionCode,
+              matchDate,
+              matchup.teamA,
+              matchup.teamB,
             );
-            const standings = shared ? await getStandings(shared.id) : null;
 
-            sports = {
-              matchup: {
-                teamA: teamA.name,
-                teamB: teamB.name,
-                teamAId: teamA.id,
-                teamBId: teamB.id,
-                crestA: teamA.crest ?? null,
-                crestB: teamB.crest ?? null,
-              },
-              recentA,
-              recentB,
-              headToHead,
-              standings,
-            };
+            if (fixture) {
+              const [recentA, recentB, headToHead, detailsA, detailsB, standings] =
+                await Promise.all([
+                  getRecentMatches(fixture.homeTeamId, 5),
+                  getRecentMatches(fixture.awayTeamId, 5),
+                  getHeadToHead(fixture.matchId, 5),
+                  getTeamDetails(fixture.homeTeamId),
+                  getTeamDetails(fixture.awayTeamId),
+                  getStandings(competitionCode),
+                ]);
+
+              sports = {
+                matchup: {
+                  teamA: fixture.homeTeamName,
+                  teamB: fixture.awayTeamName,
+                  teamAId: fixture.homeTeamId,
+                  teamBId: fixture.awayTeamId,
+                  crestA: detailsA?.crest ?? null,
+                  crestB: detailsB?.crest ?? null,
+                },
+                recentA,
+                recentB,
+                headToHead,
+                standings,
+              };
+              sportsMeta = { enabled: true };
+            } else {
+              sportsMeta = { enabled: false, reason: 'fixture_not_found' };
+            }
+          } catch (err) {
+            console.warn('[PolyPicks] sports enrichment skipped', err);
+            sportsMeta = { enabled: false, reason: 'fixture_not_found' };
           }
-        } catch (err) {
-          console.warn('[PolyPicks] sports enrichment skipped', err);
+        } else {
+          sportsMeta = { enabled: false, reason: 'fixture_not_found' };
         }
       }
     }
@@ -75,6 +96,7 @@ export async function GET(_: Request, { params }: Params) {
     const payload: MarketDetailsResponse = {
       ...market,
       ...(sports ? { sports } : {}),
+      ...(sports ? {} : { sportsMeta }),
     };
 
     return NextResponse.json<MarketDetailsResponse>(payload, {

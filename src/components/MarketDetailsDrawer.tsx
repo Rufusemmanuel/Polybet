@@ -232,7 +232,11 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                 </h3>
                 {!details.sports && (
                   <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
-                    Stats currently supported for soccer markets only.
+                    {details.sportsMeta?.reason === 'missing_api_key'
+                      ? 'Set FOOTBALL_DATA_API_KEY in .env.local / Vercel env vars to enable soccer stats.'
+                      : details.sportsMeta?.reason === 'fixture_not_found'
+                        ? 'No fixture found for this matchup/date (league coverage may be limited).'
+                        : 'Stats currently supported for soccer markets only.'}
                   </p>
                 )}
                 {details.sports && (
