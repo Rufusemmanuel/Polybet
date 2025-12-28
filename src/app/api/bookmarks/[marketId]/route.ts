@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
 type Params = { params: { marketId: string } };
 
-export async function DELETE(request: Request, { params }: Params) {
+export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     if (!prisma) {
       return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });

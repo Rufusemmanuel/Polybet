@@ -1,5 +1,6 @@
 import 'server-only';
 import { createHash, randomBytes } from 'crypto';
+import type { NextRequest } from 'next/server';
 import { prisma } from './prisma';
 
 const SESSION_COOKIE = 'pp_session';
@@ -32,7 +33,7 @@ export const createSession = async (userId: string) => {
   return { token, expiresAt };
 };
 
-export const getUserFromRequest = async (request: Request) => {
+export const getUserFromRequest = async (request: NextRequest) => {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   if (!token) return null;
 

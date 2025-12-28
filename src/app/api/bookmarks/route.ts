@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
@@ -6,7 +6,7 @@ type BookmarkPayload = {
   marketId?: string;
 };
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   try {
     if (!prisma) {
       return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     if (!prisma) {
       return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
