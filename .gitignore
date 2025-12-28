@@ -9,6 +9,10 @@ data/polypicks.db
 data/polypicks.db-journal
 data/polybet.db
 data/polybet.db-journal
+prisma/data/polypicks.db
+prisma/data/polypicks.db-journal
+prisma/data/*.db
+prisma/data/*.db-journal
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

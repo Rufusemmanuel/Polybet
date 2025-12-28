@@ -11,9 +11,17 @@ type Props = {
   market: MarketForCard;
   isDark: boolean;
   onOpenDetails?: (marketId: string) => void;
+  isBookmarked?: boolean;
+  onToggleBookmark?: (marketId: string) => void;
 };
 
-export function MarketCard({ market, isDark, onOpenDetails }: Props) {
+export function MarketCard({
+  market,
+  isDark,
+  onOpenDetails,
+  isBookmarked = false,
+  onToggleBookmark,
+}: Props) {
   const [remaining, setRemaining] = useState(() =>
     differenceInMilliseconds(new Date(market.endDate), Date.now()),
   );
@@ -61,15 +69,42 @@ export function MarketCard({ market, isDark, onOpenDetails }: Props) {
               {market.title}
             </h3>
           </div>
-          <span
-            className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-              isDark
-                ? 'border-blue-800 bg-blue-900/40 text-blue-100'
-                : 'border-blue-200 bg-blue-50 text-[#002cff]'
-            }`}
-          >
-            Live
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                isDark
+                  ? 'border-blue-800 bg-blue-900/40 text-blue-100'
+                  : 'border-blue-200 bg-blue-50 text-[#002cff]'
+              }`}
+            >
+              Live
+            </span>
+            <button
+              type="button"
+              aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
+              aria-pressed={isBookmarked}
+              onClick={() => onToggleBookmark?.(market.id)}
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition ${
+                isBookmarked
+                  ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'
+                  : isDark
+                    ? 'border-slate-700 text-slate-300 hover:border-slate-400 hover:text-white'
+                    : 'border-slate-300 text-slate-600 hover:border-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-4 w-4"
+                fill={isBookmarked ? 'currentColor' : 'none'}
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z" />
+              </svg>
+            </button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-4 text-sm">
           <div>

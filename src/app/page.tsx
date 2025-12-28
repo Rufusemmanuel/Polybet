@@ -3,6 +3,7 @@
 
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
 import { Providers } from '@/components/providers';
@@ -10,7 +11,10 @@ import { useMarkets } from '@/lib/useMarkets';
 import { MarketCard } from '@/components/MarketCard';
 import { Skeleton } from '@/components/Skeleton';
 import { MarketDetailsDrawer } from '@/components/MarketDetailsDrawer';
+import { SignUpModal } from '@/components/SignUpModal';
 import type { MarketSummary } from '@/lib/polymarket/types';
+import { useSession } from '@/lib/useSession';
+import { useBookmarks } from '@/lib/useBookmarks';
 
 type MarketWithStrings = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
   endDate: string;
@@ -256,11 +260,82 @@ function MarketsSection({
   isDark: boolean;
 }) {
   const { data, isLoading, isError } = marketsQuery;
+  const sessionQuery = useSession();
+  const queryClient = useQueryClient();
+  const user = sessionQuery.data?.user ?? null;
+  const bookmarksQuery = useBookmarks(Boolean(user));
   const [activeSubdivision, setActiveSubdivision] = useState<'All' | Subdivision>('All');
   const [windowMode, setWindowMode] = useState<WindowMode>('24');
   const [search, setSearch] = useState('');
   const [selectedMarketId, setSelectedMarketId] = useState<string | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [pendingBookmarkId, setPendingBookmarkId] = useState<string | null>(null);
+
+  const bookmarkedIds = useMemo(
+    () => new Set(bookmarksQuery.data?.marketIds ?? []),
+    [bookmarksQuery.data?.marketIds],
+  );
+
+  const toggleBookmark = useMutation({
+    mutationFn: async ({
+      marketId,
+      isBookmarked,
+    }: {
+      marketId: string;
+      isBookmarked: boolean;
+    }) => {
+      const res = await fetch(
+        isBookmarked ? `/api/bookmarks/${marketId}` : '/api/bookmarks',
+        {
+          method: isBookmarked ? 'DELETE' : 'POST',
+          headers: isBookmarked ? undefined : { 'Content-Type': 'application/json' },
+          body: isBookmarked ? undefined : JSON.stringify({ marketId }),
+        },
+      );
+      if (!res.ok) throw new Error('Unable to update bookmark');
+      return res.json();
+    },
+    onMutate: async ({ marketId, isBookmarked }) => {
+      await queryClient.cancelQueries({ queryKey: ['bookmarks'] });
+      const previous = queryClient.getQueryData<{ marketIds: string[] }>(['bookmarks']);
+      const prevIds = previous?.marketIds ?? [];
+      const nextIds = isBookmarked
+        ? prevIds.filter((id) => id !== marketId)
+        : [...prevIds, marketId];
+      queryClient.setQueryData(['bookmarks'], { marketIds: nextIds });
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['bookmarks'], context.previous);
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    },
+  });
+
+  const handleToggleBookmark = (marketId: string) => {
+    if (!user) {
+      setPendingBookmarkId(marketId);
+      setIsSignUpOpen(true);
+      return;
+    }
+
+    const isBookmarked = bookmarkedIds.has(marketId);
+    toggleBookmark.mutate({ marketId, isBookmarked });
+  };
+
+  const handleSignUpSuccess = (nextUser: { id: string; name: string }) => {
+    queryClient.setQueryData(['session'], { user: nextUser });
+    setIsSignUpOpen(false);
+
+    if (pendingBookmarkId) {
+      toggleBookmark.mutate({ marketId: pendingBookmarkId, isBookmarked: false });
+      setPendingBookmarkId(null);
+    }
+  };
 
   const marketsByWindow = useMemo<MarketWithStrings[]>(() => {
     if (!data) return [];
@@ -443,6 +518,8 @@ function MarketsSection({
                 setSelectedMarketId(marketId);
                 setIsDetailsOpen(true);
               }}
+              isBookmarked={bookmarkedIds.has(m.id)}
+              onToggleBookmark={handleToggleBookmark}
             />
           ))}
         </div>
@@ -452,6 +529,15 @@ function MarketsSection({
         isOpen={isDetailsOpen}
         onClose={() => setIsDetailsOpen(false)}
         isDark={isDark}
+      />
+      <SignUpModal
+        isOpen={isSignUpOpen}
+        isDark={isDark}
+        onClose={() => {
+          setIsSignUpOpen(false);
+          setPendingBookmarkId(null);
+        }}
+        onSuccess={handleSignUpSuccess}
       />
     </section>
   );
