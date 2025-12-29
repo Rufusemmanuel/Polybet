@@ -35,6 +35,46 @@ export default function TradePage() {
   const alertsQuery = useAlerts(Boolean(user));
 
   useEffect(() => {
+    if (!user) return;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+
+    const runCheck = () => {
+      fetch('/api/cron/check-alerts', { method: 'POST' }).catch(() => null);
+    };
+
+    const startPolling = () => {
+      if (document.hidden) return;
+      if (!intervalId) {
+        runCheck();
+        intervalId = setInterval(runCheck, 60_000);
+      }
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        startPolling();
+      }
+    };
+
+    startPolling();
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user]);
+
+  useEffect(() => {
     if (sessionQuery.isLoading) return;
     if (!user) {
       router.push(asRoute('/?auth=login'));

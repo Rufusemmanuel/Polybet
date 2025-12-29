@@ -1,22 +1,20 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getMarketDetails } from '@/lib/polymarket/api';
+import { getUserFromRequest } from '@/lib/auth';
 
 const CRON_SECRET = process.env.CRON_SECRET;
 
 const isAuthorized = (request: NextRequest) => {
   const auth = request.headers.get('authorization');
   if (CRON_SECRET && auth === `Bearer ${CRON_SECRET}`) return true;
-  if (process.env.NODE_ENV === 'production' && request.headers.has('x-vercel-cron')) {
-    return true;
-  }
   return false;
 };
 
-export async function GET(request: NextRequest) {
-  const errors: string[] = [];
+export async function POST(request: NextRequest) {
   try {
-    if (!isAuthorized(request)) {
+    const user = await getUserFromRequest(request);
+    if (!user && !isAuthorized(request)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     if (!prisma) {
@@ -47,7 +45,6 @@ export async function GET(request: NextRequest) {
           const market = await getMarketDetails(marketId);
           marketMap.set(marketId, market);
         } catch (error) {
-          errors.push(`market:${marketId}`);
           marketMap.set(marketId, null);
         }
       }),
@@ -113,13 +110,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       checkedAlerts: alerts.length,
       triggered,
-      errors,
     });
   } catch (error) {
     console.error('[cron/check-alerts] error', error);
-    return NextResponse.json(
-      { error: 'Unable to check alerts', errors },
-      { status: 500 },
-    );
+    return NextResponse.json({ error: 'Unable to check alerts' }, { status: 500 });
   }
 }
