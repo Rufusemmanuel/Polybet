@@ -87,11 +87,14 @@ export default function TradePage() {
                 >
                   <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-sm text-slate-400">{market!.category}</p>
-                    <p className="truncate text-base font-semibold text-slate-100">
+                    <p
+                      className="truncate text-base font-semibold text-slate-100"
+                      title={market!.title}
+                    >
                       {market!.title}
                     </p>
                   </div>
-                  <div className="flex w-full flex-col gap-2 sm:w-[260px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
+                  <div className="flex w-full flex-col gap-3 sm:w-[320px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
                     <button
                       type="button"
                       onClick={() =>
@@ -101,7 +104,7 @@ export default function TradePage() {
                           initialPrice: bookmark.initialPrice,
                         })
                       }
-                      className="h-9 whitespace-nowrap rounded-full border border-slate-700 px-4 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
+                      className="h-10 min-w-[140px] whitespace-nowrap rounded-full border border-slate-700 px-4 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
                     >
                       Analytics
                     </button>
@@ -109,7 +112,7 @@ export default function TradePage() {
                       href={market!.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="h-9 whitespace-nowrap rounded-full bg-[#002cff] px-4 text-xs font-semibold text-white transition hover:bg-blue-700"
+                      className="h-10 min-w-[180px] whitespace-nowrap rounded-full bg-[#002cff] px-5 text-xs font-semibold text-white transition hover:bg-blue-700"
                     >
                       Trade on Polymarket
                     </a>
