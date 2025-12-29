@@ -83,13 +83,15 @@ export default function TradePage() {
               {bookmarkedMarkets.map(({ market, bookmark }) => (
                 <div
                   key={market!.id}
-                  className="flex flex-col gap-2 rounded-xl border border-slate-800 bg-[#0b1224] p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-[#0b1224] p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <div>
+                  <div className="min-w-0 flex-1 space-y-1">
                     <p className="text-sm text-slate-400">{market!.category}</p>
-                    <p className="text-base font-semibold">{market!.title}</p>
+                    <p className="truncate text-base font-semibold text-slate-100">
+                      {market!.title}
+                    </p>
                   </div>
-                  <div className="flex flex-col gap-2 sm:flex-row">
+                  <div className="flex w-full flex-col gap-2 sm:w-[260px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
                     <button
                       type="button"
                       onClick={() =>
@@ -99,7 +101,7 @@ export default function TradePage() {
                           initialPrice: bookmark.initialPrice,
                         })
                       }
-                      className="rounded-full border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
+                      className="h-9 whitespace-nowrap rounded-full border border-slate-700 px-4 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
                     >
                       Analytics
                     </button>
@@ -107,7 +109,7 @@ export default function TradePage() {
                       href={market!.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="rounded-full bg-[#002cff] px-4 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                      className="h-9 whitespace-nowrap rounded-full bg-[#002cff] px-4 text-xs font-semibold text-white transition hover:bg-blue-700"
                     >
                       Trade on Polymarket
                     </a>
