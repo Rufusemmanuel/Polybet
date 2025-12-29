@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && node scripts/strip-bom.js && node scripts/vercel-migrate.js && next build",
+    "vercel-build": "node scripts/strip-bom.js && prisma generate && node scripts/prisma-unblock-and-deploy.js && next build",
     "start": "next start",
     "lint": "next lint",
     "test:category": "tsc -p tsconfig.category-test.json && node .tmp-category-test/scripts/category-harness.js",
@@ -25,6 +25,7 @@
     "classnames": "2.5.1",
     "date-fns": "3.6.0",
     "next": "14.2.7",
+    "pg": "8.13.1",
     "prisma": "5.20.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
