@@ -4,9 +4,7 @@
 import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Navbar } from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { Providers } from '@/components/providers';
 import { useMarkets } from '@/lib/useMarkets';
 import { MarketCard } from '@/components/MarketCard';
 import { Skeleton } from '@/components/Skeleton';
@@ -115,11 +113,7 @@ function mapToSubdivision(market: MarketWithStrings): Subdivision {
 }
 
 export default function Page() {
-  return (
-    <Providers>
-      <PageContent />
-    </Providers>
-  );
+  return <PageContent />;
 }
 
 function PageContent() {
@@ -140,7 +134,6 @@ function PageContent() {
 
   return (
     <>
-      <Navbar />
       <main className={isDark ? 'bg-[#0b1224] text-slate-100' : 'bg-white text-slate-900'}>
         <Hero
           liveMarketsTotal={liveMarketsTotal}

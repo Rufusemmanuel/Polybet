@@ -54,6 +54,12 @@ export const getUserFromRequest = async (request: NextRequest) => {
   return session.user;
 };
 
+export const deleteSessionByToken = async (token: string) => {
+  const db = ensurePrisma();
+  const tokenHash = hashToken(token);
+  await db.session.deleteMany({ where: { tokenHash } });
+};
+
 export const sessionCookieOptions = () => ({
   httpOnly: true,
   sameSite: 'lax' as const,
