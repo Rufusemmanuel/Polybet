@@ -78,34 +78,69 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
     return `${match.homeTeam} ${match.homeScore ?? '-'}-${match.awayScore ?? '-'} ${match.awayTeam}`;
   };
 
-  const MatchList = ({
-    title,
-    matches,
-    teamName,
+  const getInitials = (name: string) =>
+    name
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toUpperCase())
+      .join('');
+
+  const TeamBadge = ({
+    name,
+    crest,
+    align = 'left',
   }: {
-    title: string;
-    matches: MatchItem[];
-    teamName?: string;
+    name: string;
+    crest?: string | null;
+    align?: 'left' | 'right';
   }) => (
-    <div className="space-y-2">
-      <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>{title}</p>
-      <ul className="space-y-2 text-sm">
-        {matches.map((match) => {
-          const meta = formatMatchMeta(match);
-          return (
-            <li key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`} className="space-y-1">
-              <p className={isDark ? 'text-slate-200' : 'text-slate-800'}>
-                {renderMatchLine(match, teamName)}
-              </p>
-              {meta && (
-                <p className={isDark ? 'text-slate-500' : 'text-slate-400'}>{meta}</p>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+    <div
+      className={`flex items-center gap-3 ${
+        align === 'right' ? 'justify-end text-right' : 'justify-start text-left'
+      }`}
+    >
+      {crest ? (
+        <img src={crest} alt={name} className="h-9 w-9 rounded-full bg-white/5" />
+      ) : (
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-xs font-semibold text-slate-100">
+          {getInitials(name)}
+        </div>
+      )}
+      <span className="text-sm font-semibold text-slate-100">{name}</span>
     </div>
   );
+
+  const SectionHeader = ({ label, title }: { label: string; title: string }) => (
+    <div className="space-y-1 border-b border-white/10 pb-2">
+      <p className="text-xs uppercase tracking-widest text-slate-300">{label}</p>
+      <p className="text-sm font-semibold uppercase tracking-wide text-slate-100">{title}</p>
+    </div>
+  );
+
+  const MatchRow = ({ match, teamName }: { match: MatchItem; teamName?: string }) => {
+    const meta = formatMatchMeta(match);
+    return (
+      <div className="rounded-lg px-3 py-2 hover:bg-white/5">
+        <p className="text-sm font-semibold text-slate-100">
+          {renderMatchLine(match, teamName)}
+        </p>
+        {meta && <p className="text-xs text-slate-400">{meta}</p>}
+      </div>
+    );
+  };
+
+  const HeadToHeadRow = ({ match }: { match: MatchItem }) => {
+    const meta = formatMatchMeta(match);
+    return (
+      <div className="rounded-lg px-3 py-2 hover:bg-white/5">
+        <p className="text-sm font-semibold text-slate-100">
+          {match.homeTeam} {match.homeScore ?? '-'}-{match.awayScore ?? '-'} {match.awayTeam}
+        </p>
+        {meta && <p className="text-xs text-slate-400">{meta}</p>}
+      </div>
+    );
+  };
 
   if (!isOpen) return null;
 
@@ -275,7 +310,7 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
             )}
 
             {activeTab === 'stats' && (
-              <section className="space-y-3">
+              <section className="space-y-6">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-400">
                   Team stats
                 </h3>
@@ -299,44 +334,70 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                   </p>
                 )}
                 {details.sports && (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        {details.sports.matchup.crestA && (
-                          <img
-                            src={details.sports.matchup.crestA}
-                            alt={details.sports.matchup.teamA}
-                            className="h-8 w-8"
-                          />
-                        )}
-                        <span className="font-semibold">{details.sports.matchup.teamA}</span>
-                      </div>
-                      <span className={isDark ? 'text-slate-400' : 'text-slate-500'}>vs</span>
-                      <div className="flex items-center gap-2">
-                        {details.sports.matchup.crestB && (
-                          <img
-                            src={details.sports.matchup.crestB}
-                            alt={details.sports.matchup.teamB}
-                            className="h-8 w-8"
-                          />
-                        )}
-                        <span className="font-semibold">{details.sports.matchup.teamB}</span>
+                  <div className="space-y-6">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                      <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                        <TeamBadge
+                          name={details.sports.matchup.teamA}
+                          crest={details.sports.matchup.crestA}
+                        />
+                        <span className="text-xs uppercase tracking-widest text-slate-400">
+                          vs
+                        </span>
+                        <TeamBadge
+                          name={details.sports.matchup.teamB}
+                          crest={details.sports.matchup.crestB}
+                          align="right"
+                        />
                       </div>
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <MatchList
-                        title={`${details.sports.matchup.teamA} last 5 matches`}
-                        matches={details.sports.recentA}
-                        teamName={details.sports.matchup.teamA}
-                      />
-                      <MatchList
-                        title={`${details.sports.matchup.teamB} last 5 matches`}
-                        matches={details.sports.recentB}
-                        teamName={details.sports.matchup.teamB}
-                      />
+
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                      <SectionHeader label="Team stats" title="Team last 5 matches" />
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                          <p className="text-xs uppercase tracking-widest text-slate-400">
+                            {details.sports.matchup.teamA}
+                          </p>
+                          <div className="space-y-2">
+                            {details.sports.recentA.map((match) => (
+                              <MatchRow
+                                key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
+                                match={match}
+                                teamName={details.sports.matchup.teamA}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <p className="text-xs uppercase tracking-widest text-slate-400">
+                            {details.sports.matchup.teamB}
+                          </p>
+                          <div className="space-y-2">
+                            {details.sports.recentB.map((match) => (
+                              <MatchRow
+                                key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
+                                match={match}
+                                teamName={details.sports.matchup.teamB}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
                     </div>
+
                     {details.sports.headToHead.length > 0 && (
-                      <MatchList title="Head to head" matches={details.sports.headToHead} />
+                      <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
+                        <SectionHeader label="Matchups" title="Head to head" />
+                        <div className="space-y-2">
+                          {details.sports.headToHead.map((match) => (
+                            <HeadToHeadRow
+                              key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
+                              match={match}
+                            />
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
