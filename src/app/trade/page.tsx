@@ -12,11 +12,13 @@ export default function TradePage() {
   const bookmarksQuery = useBookmarks(Boolean(user));
   const marketsQuery = useMarkets();
   const router = useRouter();
+  type AnyRoute = Parameters<typeof router.push>[0];
+  const asRoute = (href: string) => href as unknown as AnyRoute;
 
   useEffect(() => {
     if (sessionQuery.isLoading) return;
     if (!user) {
-      router.push('/?auth=login');
+      router.push(asRoute('/?auth=login'));
     }
   }, [sessionQuery.isLoading, user, router]);
 

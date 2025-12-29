@@ -12,11 +12,13 @@ export default function ProfilePage() {
   const bookmarksQuery = useBookmarks(Boolean(user));
   const router = useRouter();
   const queryClient = useQueryClient();
+  type AnyRoute = Parameters<typeof router.push>[0];
+  const asRoute = (href: string) => href as unknown as AnyRoute;
 
   useEffect(() => {
     if (sessionQuery.isLoading) return;
     if (!user) {
-      router.push('/?auth=login');
+      router.push(asRoute('/?auth=login'));
     }
   }, [sessionQuery.isLoading, user, router]);
 
@@ -24,7 +26,7 @@ export default function ProfilePage() {
     await fetch('/api/auth/logout', { method: 'POST' });
     queryClient.setQueryData(['session'], { user: null });
     queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
-    router.push('/');
+    router.push(asRoute('/'));
   };
 
   if (!user) {

@@ -25,6 +25,8 @@ export function Navbar() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+  type AnyRoute = Parameters<typeof router.replace>[0];
+  const asRoute = (href: string) => href as unknown as AnyRoute;
 
   useEffect(() => {
     const auth = searchParams.get('auth');
@@ -60,7 +62,10 @@ export function Navbar() {
 
   const clearAuthParam = () => {
     if (!searchParams.get('auth') || !pathname) return;
-    router.replace(pathname as `/${string}`, { scroll: false });
+    const params = new URLSearchParams(searchParams);
+    params.delete('auth');
+    const href = params.toString() ? `${pathname}?${params.toString()}` : pathname;
+    router.replace(asRoute(href), { scroll: false });
   };
 
   const handleLoginSuccess = (nextUser: { id: string; name: string }) => {
@@ -80,7 +85,7 @@ export function Navbar() {
     queryClient.setQueryData(['session'], { user: null });
     queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
     setIsMenuOpen(false);
-    router.push('/');
+    router.push(asRoute('/'));
   };
 
   return (
