@@ -12,7 +12,13 @@ type Props = {
   isDark: boolean;
   onOpenDetails?: (marketId: string) => void;
   isBookmarked?: boolean;
-  onToggleBookmark?: (marketId: string, initialPrice: number) => void;
+  onToggleBookmark?: (data: {
+    marketId: string;
+    initialPrice: number;
+    title: string;
+    category: string;
+    marketUrl: string;
+  }) => void;
 };
 
 export function MarketCard({
@@ -83,7 +89,15 @@ export function MarketCard({
               type="button"
               aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
               aria-pressed={isBookmarked}
-              onClick={() => onToggleBookmark?.(market.id, market.price.price)}
+              onClick={() =>
+                onToggleBookmark?.({
+                  marketId: market.id,
+                  initialPrice: market.price.price,
+                  title: market.title,
+                  category: market.category ?? 'Unknown',
+                  marketUrl: market.url,
+                })
+              }
               className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition ${
                 isBookmarked
                   ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'

@@ -65,6 +65,9 @@ model Bookmark {
   id        String   @id @default(cuid())
   userId    String
   marketId  String
+  title     String?
+  category  String?
+  marketUrl String?
   initialPrice Float?
   createdAt DateTime @default(now())
 

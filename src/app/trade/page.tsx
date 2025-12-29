@@ -44,12 +44,10 @@ export default function TradePage() {
 
   const bookmarkedMarkets = useMemo(() => {
     const bookmarks = bookmarksQuery.data?.bookmarks ?? [];
-    return bookmarks
-      .map((bookmark) => ({
-        market: marketMap.get(bookmark.marketId),
-        bookmark,
-      }))
-      .filter((entry) => Boolean(entry.market));
+    return bookmarks.map((bookmark) => ({
+      market: marketMap.get(bookmark.marketId),
+      bookmark,
+    }));
   }, [bookmarksQuery.data?.bookmarks, marketMap]);
 
   if (!user) {
@@ -80,18 +78,22 @@ export default function TradePage() {
           )}
           {bookmarkedMarkets.length > 0 && (
             <div className="space-y-3">
-              {bookmarkedMarkets.map(({ market, bookmark }) => (
+              {bookmarkedMarkets.map(({ market, bookmark }) => {
+                const title = market?.title ?? bookmark.title ?? 'Unknown market';
+                const category = market?.category ?? bookmark.category ?? 'Unknown';
+                const marketUrl = market?.url ?? bookmark.marketUrl ?? '#';
+                return (
                 <div
-                  key={market!.id}
+                  key={bookmark.marketId}
                   className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-[#0b1224] p-4 sm:flex-row sm:items-center sm:justify-between"
                 >
                   <div className="min-w-0 flex-1 space-y-1">
-                    <p className="text-sm text-slate-400">{market!.category}</p>
+                    <p className="text-sm text-slate-400">{category}</p>
                     <p
                       className="truncate text-base font-semibold text-slate-100"
-                      title={market!.title}
+                      title={title}
                     >
-                      {market!.title}
+                      {title}
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-3 sm:w-[320px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
@@ -99,7 +101,7 @@ export default function TradePage() {
                       type="button"
                       onClick={() =>
                         setSelectedAnalytics({
-                          marketId: market!.id,
+                          marketId: bookmark.marketId,
                           bookmarkedAt: bookmark.createdAt,
                           initialPrice: bookmark.initialPrice,
                         })
@@ -109,7 +111,7 @@ export default function TradePage() {
                       Analytics
                     </button>
                     <a
-                      href={market!.url}
+                      href={marketUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="h-10 min-w-[180px] whitespace-nowrap rounded-full bg-[#002cff] px-5 text-xs font-semibold text-white transition hover:bg-blue-700"
@@ -118,14 +120,15 @@ export default function TradePage() {
                     </a>
                   </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>
       </div>
       {selectedAnalytics && (
         <AnalyticsModal
-          market={marketMap.get(selectedAnalytics.marketId) as MarketWithStrings}
+          market={marketMap.get(selectedAnalytics.marketId)}
+          marketId={selectedAnalytics.marketId}
           bookmarkedAt={selectedAnalytics.bookmarkedAt}
           initialPrice={selectedAnalytics.initialPrice}
           onClose={() => setSelectedAnalytics(null)}
@@ -137,22 +140,56 @@ export default function TradePage() {
 
 function AnalyticsModal({
   market,
+  marketId,
   bookmarkedAt,
   initialPrice,
   onClose,
 }: {
-  market: MarketWithStrings;
+  market?: MarketWithStrings;
+  marketId: string;
   bookmarkedAt: string;
   initialPrice: number | null;
   onClose: () => void;
 }) {
+  const [details, setDetails] = useState<{
+    closesAt: string;
+    price: number;
+    title: string;
+    category: string;
+  } | null>(null);
   const bookmarkedDate = new Date(bookmarkedAt);
-  const currentPrice = market.price.price;
   const initial = initialPrice ?? null;
-  const delta = initial != null ? currentPrice - initial : null;
-  const closedAt = market.closedTime ?? market.endDate;
+
+  useEffect(() => {
+    if (market) return;
+    let isMounted = true;
+    fetch(`/api/market/${marketId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!isMounted || !data) return;
+        setDetails({
+          closesAt: data.closesAt,
+          price: data.leading?.price ?? data.leading?.prob ?? 0,
+          title: data.title ?? 'Unknown market',
+          category: data.categoryResolved ?? 'Unknown',
+        });
+      })
+      .catch((error) => {
+        console.warn('[analytics] unable to load market details', error);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [market, marketId]);
+
+  const currentPrice = market?.price.price ?? details?.price ?? null;
+  const delta = initial != null && currentPrice != null ? currentPrice - initial : null;
+  const closedAt = market?.closedTime ?? market?.endDate ?? details?.closesAt ?? null;
   const closedDate = closedAt ? new Date(closedAt) : null;
   const isClosed = closedDate ? closedDate.getTime() <= Date.now() : false;
+  const modalTitle = market?.title ?? details?.title ?? 'Market analytics';
+  const modalCategory = market?.category ?? details?.category ?? '';
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center px-4">
@@ -168,8 +205,8 @@ function AnalyticsModal({
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
               Market analytics
             </p>
-            <h2 className="text-xl font-semibold">{market.title}</h2>
-            <p className="text-sm text-slate-400">{market.category}</p>
+            <h2 className="text-xl font-semibold">{modalTitle}</h2>
+            {modalCategory && <p className="text-sm text-slate-400">{modalCategory}</p>}
           </div>
           <button
             type="button"
@@ -196,7 +233,9 @@ function AnalyticsModal({
           </div>
           <div>
             <p className="text-slate-400">Current price</p>
-            <p className="font-semibold">{(currentPrice * 100).toFixed(1)}c</p>
+            <p className="font-semibold">
+              {currentPrice != null ? `${(currentPrice * 100).toFixed(1)}c` : 'N/A'}
+            </p>
           </div>
           <div>
             <p className="text-slate-400">Change</p>
@@ -214,7 +253,9 @@ function AnalyticsModal({
           {isClosed && (
             <div>
               <p className="text-slate-400">Final price</p>
-              <p className="font-semibold">{(currentPrice * 100).toFixed(1)}c</p>
+              <p className="font-semibold">
+                {currentPrice != null ? `${(currentPrice * 100).toFixed(1)}c` : 'N/A'}
+              </p>
             </div>
           )}
         </div>

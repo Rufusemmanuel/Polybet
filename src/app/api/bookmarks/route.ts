@@ -5,6 +5,9 @@ import { getUserFromRequest } from '@/lib/auth';
 type BookmarkPayload = {
   marketId?: string;
   initialPrice?: number;
+  title?: string;
+  category?: string;
+  marketUrl?: string;
 };
 
 export async function GET(request: NextRequest) {
@@ -20,7 +23,14 @@ export async function GET(request: NextRequest) {
 
     const bookmarks = await prisma.bookmark.findMany({
       where: { userId: user.id },
-      select: { marketId: true, createdAt: true, initialPrice: true },
+      select: {
+        marketId: true,
+        createdAt: true,
+        initialPrice: true,
+        title: true,
+        category: true,
+        marketUrl: true,
+      },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -29,6 +39,9 @@ export async function GET(request: NextRequest) {
         marketId: b.marketId,
         createdAt: b.createdAt.toISOString(),
         initialPrice: b.initialPrice,
+        title: b.title,
+        category: b.category,
+        marketUrl: b.marketUrl,
       })),
     });
   } catch (error) {
@@ -54,11 +67,19 @@ export async function POST(request: NextRequest) {
       typeof body.initialPrice === 'number' && Number.isFinite(body.initialPrice)
         ? body.initialPrice
         : null;
+    const title = body.title?.trim() || null;
+    const category = body.category?.trim() || null;
+    const marketUrl = body.marketUrl?.trim() || null;
     if (!marketId) {
       return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
     }
 
-    const updateData = initialPrice != null ? { initialPrice } : {};
+    const updateData = {
+      ...(initialPrice != null ? { initialPrice } : {}),
+      ...(title ? { title } : {}),
+      ...(category ? { category } : {}),
+      ...(marketUrl ? { marketUrl } : {}),
+    };
     await prisma.bookmark.upsert({
       where: {
         userId_marketId: {
@@ -66,7 +87,14 @@ export async function POST(request: NextRequest) {
           marketId,
         },
       },
-      create: { userId: user.id, marketId, ...(initialPrice != null ? { initialPrice } : {}) },
+      create: {
+        userId: user.id,
+        marketId,
+        ...(initialPrice != null ? { initialPrice } : {}),
+        ...(title ? { title } : {}),
+        ...(category ? { category } : {}),
+        ...(marketUrl ? { marketUrl } : {}),
+      },
       update: updateData,
     });
 

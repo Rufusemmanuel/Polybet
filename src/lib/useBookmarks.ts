@@ -6,6 +6,9 @@ type BookmarkRecord = {
   marketId: string;
   createdAt: string;
   initialPrice: number | null;
+  title: string | null;
+  category: string | null;
+  marketUrl: string | null;
 };
 
 type BookmarksResponse = {
