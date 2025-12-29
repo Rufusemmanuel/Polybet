@@ -3,37 +3,37 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
 model TrackedMarket {
-  id             String   @id
-  title          String
-  category       String?
-  trackedOutcome String
-  entryPrice     Float
-  appearedAt     DateTime
-  marketUrl      String
-  closedAt       DateTime?
+  id              String   @id
+  title           String
+  category        String?
+  trackedOutcome  String
+  entryPrice      Float
+  appearedAt      DateTime
+  marketUrl       String
+  closedAt        DateTime?
   resolvedOutcome String?
-  resolvedAt     DateTime?
-  createdAt      DateTime @default(now())
+  resolvedAt      DateTime?
+  createdAt       DateTime @default(now())
 }
 
 model HistoryEntry {
-  id             String   @id @default(cuid())
-  marketId       String
-  title          String
-  category       String?
-  trackedOutcome String
-  entryPrice     Float
+  id              String   @id @default(cuid())
+  marketId        String
+  title           String
+  category        String?
+  trackedOutcome  String
+  entryPrice      Float
   resolvedOutcome String
-  appearedAt     DateTime
-  resolvedAt     DateTime
-  closedAt       DateTime?
-  marketUrl      String
-  createdAt      DateTime @default(now())
+  appearedAt      DateTime
+  resolvedAt      DateTime
+  closedAt        DateTime?
+  marketUrl       String
+  createdAt       DateTime @default(now())
 
   @@index([resolvedAt])
   @@index([marketId])

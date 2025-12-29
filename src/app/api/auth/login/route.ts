@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { createSession, sessionCookieOptions, SESSION_COOKIE } from '@/lib/auth';
 
@@ -10,10 +11,6 @@ type LoginPayload = {
 
 export async function POST(request: Request) {
   try {
-    if (!prisma) {
-      return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
-    }
-
     const body = (await request.json()) as LoginPayload;
     const name = body.name?.trim() ?? '';
     const password = body.password ?? '';
@@ -38,6 +35,9 @@ export async function POST(request: Request) {
     return response;
   } catch (error) {
     console.error('[auth/login] error', error);
+    if (error instanceof Prisma.PrismaClientInitializationError) {
+      return NextResponse.json({ error: 'Database unavailable' }, { status: 503 });
+    }
     return NextResponse.json({ error: 'Unable to login' }, { status: 500 });
   }
 }
