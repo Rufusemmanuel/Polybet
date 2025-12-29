@@ -142,6 +142,15 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
     );
   };
 
+  const sports = details?.sports;
+  const teamAName = sports?.matchup?.teamA ?? 'Team A';
+  const teamBName = sports?.matchup?.teamB ?? 'Team B';
+  const crestA = sports?.matchup?.crestA ?? null;
+  const crestB = sports?.matchup?.crestB ?? null;
+  const recentA = sports?.recentA ?? [];
+  const recentB = sports?.recentB ?? [];
+  const headToHead = sports?.headToHead ?? [];
+
   if (!isOpen) return null;
 
   return (
@@ -314,7 +323,7 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-blue-400">
                   Team stats
                 </h3>
-                {!details.sports && (
+                {!sports && (
                   <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
                     {details.sportsMeta?.reason === 'missing_api_key'
                       ? 'Set FOOTBALL_DATA_API_KEY in .env.local / Vercel env vars to enable soccer stats.'
@@ -333,22 +342,15 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                             : 'Stats currently supported for soccer markets only.'}
                   </p>
                 )}
-                {details.sports && (
+                {sports?.matchup ? (
                   <div className="space-y-6">
                     <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                       <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
-                        <TeamBadge
-                          name={details.sports.matchup.teamA}
-                          crest={details.sports.matchup.crestA}
-                        />
+                        <TeamBadge name={teamAName} crest={crestA} />
                         <span className="text-xs uppercase tracking-widest text-slate-400">
                           vs
                         </span>
-                        <TeamBadge
-                          name={details.sports.matchup.teamB}
-                          crest={details.sports.matchup.crestB}
-                          align="right"
-                        />
+                        <TeamBadge name={teamBName} crest={crestB} align="right" />
                       </div>
                     </div>
 
@@ -357,28 +359,28 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <div className="space-y-2">
                           <p className="text-xs uppercase tracking-widest text-slate-400">
-                            {details.sports.matchup.teamA}
+                            {teamAName}
                           </p>
                           <div className="space-y-2">
-                            {details.sports.recentA.map((match) => (
+                            {recentA.map((match) => (
                               <MatchRow
                                 key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
                                 match={match}
-                                teamName={details.sports.matchup.teamA}
+                                teamName={teamAName}
                               />
                             ))}
                           </div>
                         </div>
                         <div className="space-y-2">
                           <p className="text-xs uppercase tracking-widest text-slate-400">
-                            {details.sports.matchup.teamB}
+                            {teamBName}
                           </p>
                           <div className="space-y-2">
-                            {details.sports.recentB.map((match) => (
+                            {recentB.map((match) => (
                               <MatchRow
                                 key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
                                 match={match}
-                                teamName={details.sports.matchup.teamB}
+                                teamName={teamBName}
                               />
                             ))}
                           </div>
@@ -386,11 +388,11 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                       </div>
                     </div>
 
-                    {details.sports.headToHead.length > 0 && (
+                    {headToHead.length > 0 && (
                       <div className="rounded-2xl border border-white/10 bg-white/5 p-4 space-y-4">
                         <SectionHeader label="Matchups" title="Head to head" />
                         <div className="space-y-2">
-                          {details.sports.headToHead.map((match) => (
+                          {headToHead.map((match) => (
                             <HeadToHeadRow
                               key={`${match.utcDate}-${match.homeTeam}-${match.awayTeam}`}
                               match={match}
@@ -400,7 +402,11 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
                       </div>
                     )}
                   </div>
-                )}
+                ) : sports ? (
+                  <div className="text-sm text-slate-400">
+                    Stats unavailable for this market.
+                  </div>
+                ) : null}
               </section>
             )}
 
