@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && next build",
-    "vercel-build": "prisma generate && node scripts/vercel-migrate.js && next build",
+    "vercel-build": "prisma generate && node scripts/strip-bom.js && node scripts/vercel-migrate.js && next build",
     "start": "next start",
     "lint": "next lint",
     "test:category": "tsc -p tsconfig.category-test.json && node .tmp-category-test/scripts/category-harness.js",

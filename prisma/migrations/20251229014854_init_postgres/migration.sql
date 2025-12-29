@@ -1,4 +1,4 @@
-﻿-- CreateTable
+-- CreateTable
 CREATE TABLE "TrackedMarket" (
     "id" TEXT NOT NULL,
     "title" TEXT NOT NULL,
