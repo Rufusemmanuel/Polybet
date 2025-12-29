@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 type ReadPayload = {
   ids?: string[];
   all?: boolean;
@@ -36,7 +39,11 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[notifications] POST read error', error);
-    return NextResponse.json({ error: 'Unable to update notifications' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[notifications] POST read error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to update notifications', code: err?.code },
+      { status: 500 },
+    );
   }
 }

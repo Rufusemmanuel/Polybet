@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 type AlertPayload = {
   marketId?: string;
   profitThresholdPct?: number | null;
@@ -68,8 +71,12 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('[alerts] GET error', error);
-    return NextResponse.json({ error: 'Unable to load alerts' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[alerts] GET error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to load alerts', code: err?.code },
+      { status: 500 },
+    );
   }
 }
 
@@ -164,8 +171,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[alerts] POST error', error);
-    return NextResponse.json({ error: 'Unable to save alert' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[alerts] POST error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to save alert', code: err?.code },
+      { status: 500 },
+    );
   }
 }
 
@@ -191,7 +202,11 @@ export async function DELETE(request: NextRequest) {
 
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error('[alerts] DELETE error', error);
-    return NextResponse.json({ error: 'Unable to delete alert' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[alerts] DELETE error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to delete alert', code: err?.code },
+      { status: 500 },
+    );
   }
 }

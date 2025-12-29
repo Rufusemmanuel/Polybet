@@ -3,6 +3,9 @@ import { prisma } from '@/lib/prisma';
 import { getMarketDetails } from '@/lib/polymarket/api';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 const CRON_SECRET = process.env.CRON_SECRET;
 
 const isAuthorized = (request: NextRequest) => {
@@ -112,7 +115,11 @@ export async function POST(request: NextRequest) {
       triggered,
     });
   } catch (error) {
-    console.error('[cron/check-alerts] error', error);
-    return NextResponse.json({ error: 'Unable to check alerts' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[cron/check-alerts] error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to check alerts', code: err?.code },
+      { status: 500 },
+    );
   }
 }

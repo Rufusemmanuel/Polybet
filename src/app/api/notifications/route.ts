@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     if (!prisma) {
@@ -34,7 +37,11 @@ export async function GET(request: NextRequest) {
       })),
     });
   } catch (error) {
-    console.error('[notifications] GET error', error);
-    return NextResponse.json({ error: 'Unable to load notifications' }, { status: 500 });
+    const err = error as { message?: string; code?: string };
+    console.error('[notifications] GET error', err);
+    return NextResponse.json(
+      { error: err?.message ?? 'Unable to load notifications', code: err?.code },
+      { status: 500 },
+    );
   }
 }
