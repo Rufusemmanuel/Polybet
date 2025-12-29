@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSession } from '@/lib/useSession';
+import { useNotifications } from '@/lib/useNotifications';
 import { SignUpModal } from '@/components/SignUpModal';
 import { LoginModal } from '@/components/LoginModal';
 
@@ -21,7 +22,10 @@ export function Navbar() {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const notificationsRef = useRef<HTMLDivElement | null>(null);
+  const notificationsQuery = useNotifications(Boolean(user));
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -39,15 +43,25 @@ export function Navbar() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (!isMenuOpen) return;
+    if (!isMenuOpen && !isNotificationsOpen) return;
     const handler = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
+      const target = event.target as Node;
+      const isOutsideMenu = menuRef.current && !menuRef.current.contains(target);
+      const isOutsideNotifications =
+        notificationsRef.current && !notificationsRef.current.contains(target);
+      if (isOutsideMenu) setIsMenuOpen(false);
+      if (isOutsideNotifications) setIsNotificationsOpen(false);
     };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
-  }, [isMenuOpen]);
+  }, [isMenuOpen, isNotificationsOpen]);
+
+  useEffect(() => {
+    if (!isNotificationsOpen) return;
+    if ((notificationsQuery.data?.unreadCount ?? 0) > 0) {
+      notificationsQuery.markAllRead().catch(() => null);
+    }
+  }, [isNotificationsOpen, notificationsQuery]);
 
   const initials = useMemo(() => {
     if (!user?.name) return '?';
@@ -136,43 +150,115 @@ export function Navbar() {
             </>
           )}
           {user && (
-            <div className="relative" ref={menuRef}>
-              <button
-                type="button"
-                onClick={() => setIsMenuOpen((open) => !open)}
-                className="flex items-center gap-2 rounded-full border border-slate-700 px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
-              >
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#002cff] text-[11px] text-white">
-                  {initials}
-                </span>
-                <span className="hidden sm:inline">{user.name}</span>
-              </button>
-              {isMenuOpen && (
-                <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
-                  <Link
-                    href="/profile"
-                    className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800"
-                    onClick={() => setIsMenuOpen(false)}
+            <>
+              <div className="relative" ref={notificationsRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsNotificationsOpen((open) => !open);
+                    setIsMenuOpen(false);
+                  }}
+                  className="relative flex h-9 w-9 items-center justify-center rounded-full border border-slate-700 text-slate-200 transition hover:border-slate-400"
+                  aria-label="Notifications"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
                   >
-                    Profile
-                  </Link>
-                  <Link
-                    href="/trade"
-                    className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    Trades
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={handleLogout}
-                    className="w-full rounded-lg px-3 py-2 text-left text-slate-200 hover:bg-slate-800"
-                  >
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
+                    <path
+                      d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                    <path
+                      d="M9 17a3 3 0 0 0 6 0"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  {(notificationsQuery.data?.unreadCount ?? 0) > 0 && (
+                    <span className="absolute -right-1 -top-1 inline-flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold text-white">
+                      {notificationsQuery.data?.unreadCount}
+                    </span>
+                  )}
+                </button>
+                {isNotificationsOpen && (
+                  <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
+                    <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                      Alerts
+                    </p>
+                    <div className="max-h-72 space-y-1 overflow-y-auto pb-1">
+                      {notificationsQuery.data?.notifications?.length ? (
+                        notificationsQuery.data.notifications.map((note) => (
+                          <div
+                            key={note.id}
+                            className={`rounded-lg px-3 py-2 ${
+                              note.readAt ? 'text-slate-300' : 'text-slate-100'
+                            }`}
+                          >
+                            <p className="text-sm font-semibold">{note.title}</p>
+                            {note.body && (
+                              <p className="text-xs text-slate-400">{note.body}</p>
+                            )}
+                            <p className="text-[11px] text-slate-500">
+                              {new Date(note.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="px-3 py-3 text-xs text-slate-400">
+                          No notifications yet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className="relative" ref={menuRef}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMenuOpen((open) => !open);
+                    setIsNotificationsOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded-full border border-slate-700 px-2 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
+                >
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#002cff] text-[11px] text-white">
+                    {initials}
+                  </span>
+                  <span className="hidden sm:inline">{user.name}</span>
+                </button>
+                {isMenuOpen && (
+                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
+                    <Link
+                      href="/profile"
+                      className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Profile
+                    </Link>
+                    <Link
+                      href="/trade"
+                      className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800"
+                      onClick={() => setIsMenuOpen(false)}
+                    >
+                      Trades
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={handleLogout}
+                      className="w-full rounded-lg px-3 py-2 text-left text-slate-200 hover:bg-slate-800"
+                    >
+                      Log out
+                    </button>
+                  </div>
+                )}
+              </div>
+            </>
           )}
         </div>
       </div>

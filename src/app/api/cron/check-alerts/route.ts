@@ -1,0 +1,125 @@
+import { NextResponse, type NextRequest } from 'next/server';
+import { prisma } from '@/lib/prisma';
+import { getMarketDetails } from '@/lib/polymarket/api';
+
+const CRON_SECRET = process.env.CRON_SECRET;
+
+const isAuthorized = (request: NextRequest) => {
+  const auth = request.headers.get('authorization');
+  if (CRON_SECRET && auth === `Bearer ${CRON_SECRET}`) return true;
+  if (process.env.NODE_ENV === 'production' && request.headers.has('x-vercel-cron')) {
+    return true;
+  }
+  return false;
+};
+
+export async function GET(request: NextRequest) {
+  const errors: string[] = [];
+  try {
+    if (!isAuthorized(request)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!prisma) {
+      return NextResponse.json({ error: 'Database unavailable' }, { status: 500 });
+    }
+
+    const alerts = await prisma.alert.findMany({
+      where: { enabled: true },
+      select: {
+        id: true,
+        userId: true,
+        marketId: true,
+        entryPriceCents: true,
+        profitThresholdPct: true,
+        lossThresholdPct: true,
+        triggerOnce: true,
+        cooldownMinutes: true,
+        lastTriggeredAt: true,
+      },
+    });
+
+    const marketIds = Array.from(new Set(alerts.map((alert) => alert.marketId)));
+    const marketMap = new Map<string, Awaited<ReturnType<typeof getMarketDetails>>>();
+
+    await Promise.all(
+      marketIds.map(async (marketId) => {
+        try {
+          const market = await getMarketDetails(marketId);
+          marketMap.set(marketId, market);
+        } catch (error) {
+          errors.push(`market:${marketId}`);
+          marketMap.set(marketId, null);
+        }
+      }),
+    );
+
+    let triggered = 0;
+    const now = new Date();
+
+    for (const alert of alerts) {
+      if (alert.profitThresholdPct == null && alert.lossThresholdPct == null) continue;
+      if (!alert.entryPriceCents || alert.entryPriceCents <= 0) continue;
+
+      const market = marketMap.get(alert.marketId) ?? null;
+      if (!market) continue;
+
+      const currentCents = market.price.price * 100;
+      const pct =
+        ((currentCents - alert.entryPriceCents) / alert.entryPriceCents) * 100;
+
+      const cooldownMs = alert.cooldownMinutes * 60 * 1000;
+      if (
+        alert.lastTriggeredAt &&
+        now.getTime() - alert.lastTriggeredAt.getTime() < cooldownMs
+      ) {
+        continue;
+      }
+
+      const profitHit =
+        alert.profitThresholdPct != null && pct >= alert.profitThresholdPct;
+      const lossHit =
+        alert.lossThresholdPct != null && pct <= -alert.lossThresholdPct;
+
+      if (!profitHit && !lossHit) continue;
+
+      const direction = pct >= 0 ? '+' : '';
+      const body = `${market.title} moved ${direction}${pct.toFixed(
+        1,
+      )}% since you bookmarked (${alert.entryPriceCents.toFixed(
+        1,
+      )}c  ${currentCents.toFixed(1)}c).`;
+
+      await prisma.notification.create({
+        data: {
+          userId: alert.userId,
+          marketId: alert.marketId,
+          type: 'ALERT_TRIGGERED',
+          title: 'Alert triggered',
+          body,
+        },
+      });
+
+      await prisma.alert.update({
+        where: { id: alert.id },
+        data: {
+          lastTriggeredAt: now,
+          ...(alert.triggerOnce ? { enabled: false } : {}),
+        },
+      });
+
+      triggered += 1;
+    }
+
+    return NextResponse.json({
+      checkedAlerts: alerts.length,
+      triggered,
+      errors,
+    });
+  } catch (error) {
+    console.error('[cron/check-alerts] error', error);
+    return NextResponse.json(
+      { error: 'Unable to check alerts', errors },
+      { status: 500 },
+    );
+  }
+}
