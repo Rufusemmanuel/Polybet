@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     }
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const alerts = await prisma.alert.findMany({
@@ -80,13 +80,13 @@ export async function POST(request: NextRequest) {
     }
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const body = (await request.json()) as AlertPayload;
     const marketId = body.marketId?.trim();
     if (!marketId) {
-      return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing marketId' }, { status: 400 });
     }
 
     const profitThresholdPct = normalizePct(body.profitThresholdPct);
@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     if (profitThresholdPct == null && lossThresholdPct == null) {
       return NextResponse.json(
-        { error: 'At least one threshold is required' },
+        { error: 'Set profit or loss threshold' },
         { status: 400 },
       );
     }
@@ -105,10 +105,7 @@ export async function POST(request: NextRequest) {
       (profitThresholdPct != null && profitThresholdPct <= 0) ||
       (lossThresholdPct != null && lossThresholdPct <= 0)
     ) {
-      return NextResponse.json(
-        { error: 'Thresholds must be greater than 0' },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: 'Thresholds must be > 0' }, { status: 400 });
     }
 
     const bookmark = await prisma.bookmark.findUnique({
@@ -117,8 +114,8 @@ export async function POST(request: NextRequest) {
     });
     if (!bookmark?.initialPrice || bookmark.initialPrice <= 0) {
       return NextResponse.json(
-        { error: 'Bookmark entry price is required' },
-        { status: 400 },
+        { error: 'Bookmark not found for this market' },
+        { status: 404 },
       );
     }
     const resolvedEntryPrice = bookmark.initialPrice * 100;
@@ -179,13 +176,13 @@ export async function DELETE(request: NextRequest) {
     }
     const user = await getUserFromRequest(request);
     if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
     const marketId = searchParams.get('marketId')?.trim();
     if (!marketId) {
-      return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing marketId' }, { status: 400 });
     }
 
     await prisma.alert.deleteMany({

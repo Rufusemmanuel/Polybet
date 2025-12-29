@@ -17,9 +17,21 @@ type AlertsResponse = {
   alerts: AlertRecord[];
 };
 
+const parseErrorMessage = async (res: Response) => {
+  try {
+    const data = (await res.json()) as { error?: string };
+    if (data?.error) return data.error;
+  } catch {
+    // ignore json errors
+  }
+  return `${res.status} ${res.statusText}`.trim();
+};
+
 const fetchAlerts = async (): Promise<AlertsResponse> => {
-  const res = await fetch('/api/alerts');
-  if (!res.ok) throw new Error('Unable to load alerts');
+  const res = await fetch('/api/alerts', { credentials: 'include' });
+  if (!res.ok) {
+    throw new Error(await parseErrorMessage(res));
+  }
   return (await res.json()) as AlertsResponse;
 };
 
@@ -47,8 +59,11 @@ export const useAlerts = (enabled: boolean) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        credentials: 'include',
       });
-      if (!res.ok) throw new Error('Unable to save alert');
+      if (!res.ok) {
+        throw new Error(await parseErrorMessage(res));
+      }
       return res.json();
     },
     onSuccess: () => {
@@ -60,8 +75,11 @@ export const useAlerts = (enabled: boolean) => {
     mutationFn: async (marketId: string) => {
       const res = await fetch(`/api/alerts?marketId=${encodeURIComponent(marketId)}`, {
         method: 'DELETE',
+        credentials: 'include',
       });
-      if (!res.ok) throw new Error('Unable to delete alert');
+      if (!res.ok) {
+        throw new Error(await parseErrorMessage(res));
+      }
       return res.json();
     },
     onSuccess: () => {

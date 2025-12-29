@@ -364,7 +364,8 @@ function AnalyticsModal({
       setMessage('Alerts saved.');
     } catch (error) {
       console.error('[alerts] save error', error);
-      setMessage('Unable to save alerts right now.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to save alerts.';
+      setMessage(errorMessage);
     }
   };
 
@@ -375,7 +376,8 @@ function AnalyticsModal({
       setMessage('Alerts deleted.');
     } catch (error) {
       console.error('[alerts] delete error', error);
-      setMessage('Unable to delete alerts right now.');
+      const errorMessage = error instanceof Error ? error.message : 'Unable to delete alerts.';
+      setMessage(errorMessage);
     }
   };
 
