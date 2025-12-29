@@ -17,7 +17,7 @@ Next.js 14 + Prisma dashboard for Polymarket markets.
 ## Vercel
 - Set `DATABASE_URL` in Project Settings to your Postgres connection string.
 - Run migrations in production:
-  - Option A: set Vercel Build Command to `npm run prisma:migrate && npm run build`
-  - Option B: run `npx prisma migrate deploy` manually after deploys
+  - Vercel will auto-run `npm run vercel-build` if present.
+  - `vercel-build` runs migrations only when `VERCEL_ENV=production`.
 
 The app uses the Polymarket Gamma/Data API and an optional RTDS WebSocket for live prices.
