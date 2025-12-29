@@ -120,7 +120,7 @@ export function SignUpModal({ isOpen, isDark, onClose, onSuccess }: Props) {
 
         <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
           <div className="space-y-1">
-            <label className="text-sm font-semibold">Name</label>
+            <label className="text-sm font-semibold">Username</label>
             <input
               type="text"
               value={name}
@@ -131,7 +131,7 @@ export function SignUpModal({ isOpen, isDark, onClose, onSuccess }: Props) {
                   ? 'border-slate-700 bg-[#101a32] text-slate-100 focus:border-blue-500'
                   : 'border-slate-300 bg-white text-slate-900 focus:border-blue-500'
               }`}
-              placeholder="Your name"
+              placeholder="Choose a username"
             />
             {errors.name && (
               <p className="text-xs text-red-400">{errors.name}</p>
