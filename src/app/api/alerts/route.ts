@@ -55,6 +55,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
+    const { searchParams } = new URL(request.url);
+    const marketIdParam = searchParams.get('marketId')?.trim() || null;
+
     const alerts = await prisma.alert.findMany({
       where: { userId: user.id },
       select: {
@@ -72,8 +75,29 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return NextResponse.json({
-      alerts: alerts.map((alert) => ({
+    if (alerts.length === 0) {
+      if (marketIdParam) {
+        return NextResponse.json({ alert: null });
+      }
+      return NextResponse.json({ alerts: [] });
+    }
+
+    const marketIds = alerts.map((alert) => alert.marketId);
+    const bookmarks = await prisma.bookmark.findMany({
+      where: { userId: user.id, marketId: { in: marketIds } },
+      select: { marketId: true, title: true, category: true },
+    });
+    const trackedMarkets = await prisma.trackedMarket.findMany({
+      where: { id: { in: marketIds } },
+      select: { id: true, title: true, category: true },
+    });
+    const bookmarkMap = new Map(bookmarks.map((b) => [b.marketId, b]));
+    const trackedMap = new Map(trackedMarkets.map((m) => [m.id, m]));
+
+    const withMeta = alerts.map((alert) => {
+      const bookmark = bookmarkMap.get(alert.marketId);
+      const tracked = trackedMap.get(alert.marketId);
+      return {
         marketId: alert.marketId,
         entryPriceCents: alert.entryPriceCents,
         profitThresholdPct: alert.profitThresholdPct,
@@ -84,7 +108,18 @@ export async function GET(request: NextRequest) {
         lastTriggeredAt: alert.lastTriggeredAt ? alert.lastTriggeredAt.toISOString() : null,
         createdAt: alert.createdAt.toISOString(),
         updatedAt: alert.updatedAt.toISOString(),
-      })),
+        title: bookmark?.title ?? tracked?.title ?? null,
+        category: bookmark?.category ?? tracked?.category ?? null,
+      };
+    });
+
+    if (marketIdParam) {
+      const alert = withMeta.find((item) => item.marketId === marketIdParam) ?? null;
+      return NextResponse.json({ alert });
+    }
+
+    return NextResponse.json({
+      alerts: withMeta,
     });
   } catch (error) {
     const missingCode = getMissingTableCode(error);

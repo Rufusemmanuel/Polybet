@@ -11,6 +11,8 @@ type AlertRecord = {
   lastTriggeredAt: string | null;
   createdAt: string;
   updatedAt: string;
+  title: string | null;
+  category: string | null;
 };
 
 type AlertsResponse = {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/useSession';
 import { useAlerts } from '@/lib/useAlerts';
 import { useBookmarks } from '@/lib/useBookmarks';
@@ -20,15 +20,18 @@ export default function TradePage() {
   const bookmarksQuery = useBookmarks(Boolean(user));
   const marketsQuery = useMarkets();
   const router = useRouter();
+  const searchParams = useSearchParams();
   type AnyRoute = Parameters<typeof router.push>[0];
   const asRoute = (href: string) => href as unknown as AnyRoute;
   const [selectedAnalytics, setSelectedAnalytics] = useState<{
     marketId: string;
     bookmarkedAt: string;
     initialPrice: number | null;
+    initialTab?: 'analytics' | 'alerts';
   } | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const alertsQuery = useAlerts(Boolean(user));
+  const handledDeepLink = useRef(false);
 
   useEffect(() => {
     if (!user) return;
@@ -75,7 +78,7 @@ export default function TradePage() {
     if (!user) {
       router.push(asRoute('/?auth=login'));
     }
-  }, [sessionQuery.isLoading, user, router]);
+  }, [sessionQuery.isLoading, user, router, asRoute]);
 
   const marketMap = useMemo(() => {
     const all = [
@@ -92,6 +95,30 @@ export default function TradePage() {
       bookmark,
     }));
   }, [bookmarksQuery.data?.bookmarks, marketMap]);
+
+  const alertMap = useMemo(() => {
+    const alerts = alertsQuery.data?.alerts ?? [];
+    return new Map(alerts.map((alert) => [alert.marketId, alert]));
+  }, [alertsQuery.data?.alerts]);
+
+  useEffect(() => {
+    if (handledDeepLink.current) return;
+    const marketId = searchParams.get('marketId');
+    if (!marketId) return;
+    const tab = searchParams.get('tab');
+    const bookmark = bookmarksQuery.data?.bookmarks.find(
+      (item) => item.marketId === marketId,
+    );
+    if (!bookmark) return;
+    handledDeepLink.current = true;
+    setSelectedAnalytics({
+      marketId,
+      bookmarkedAt: bookmark.createdAt,
+      initialPrice: bookmark.initialPrice,
+      initialTab: tab === 'alerts' ? 'alerts' : 'analytics',
+    });
+    router.replace(asRoute('/trade'), { scroll: false });
+  }, [bookmarksQuery.data?.bookmarks, searchParams, router, asRoute]);
 
   if (!user) {
     return (
@@ -126,6 +153,7 @@ export default function TradePage() {
                 const title = market?.title ?? bookmark.title ?? 'Unknown market';
                 const category = market?.category ?? bookmark.category ?? 'Unknown';
                 const marketUrl = market?.url ?? bookmark.marketUrl ?? '#';
+                const alert = alertMap.get(bookmark.marketId);
                 return (
                 <div
                   key={bookmark.marketId}
@@ -141,6 +169,56 @@ export default function TradePage() {
                     </p>
                   </div>
                   <div className="flex w-full flex-col gap-3 sm:w-[420px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
+                    {alert && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedAnalytics({
+                            marketId: bookmark.marketId,
+                            bookmarkedAt: bookmark.createdAt,
+                            initialPrice: bookmark.initialPrice,
+                            initialTab: 'alerts',
+                          })
+                        }
+                        className={`inline-flex h-10 min-w-[90px] items-center justify-center gap-2 whitespace-nowrap rounded-full border px-3 text-xs font-semibold transition ${
+                          alert.enabled
+                            ? 'border-blue-500/60 text-blue-100 hover:border-blue-400'
+                            : 'border-slate-700 text-slate-400 hover:border-slate-500'
+                        }`}
+                      >
+                        <svg
+                          viewBox="0 0 24 24"
+                          aria-hidden="true"
+                          className="h-4 w-4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                          <path
+                            d="M9 17a3 3 0 0 0 6 0"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                        <span className="text-[11px]">
+                          {[
+                            alert.profitThresholdPct != null
+                              ? `+${alert.profitThresholdPct.toFixed(0)}`
+                              : null,
+                            alert.lossThresholdPct != null
+                              ? `-${alert.lossThresholdPct.toFixed(0)}`
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' / ') || 'Alert'}
+                        </span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() =>
@@ -191,6 +269,7 @@ export default function TradePage() {
           bookmarkedAt={selectedAnalytics.bookmarkedAt}
           initialPrice={selectedAnalytics.initialPrice}
           alertsQuery={alertsQuery}
+          initialTab={selectedAnalytics.initialTab}
           onClose={() => setSelectedAnalytics(null)}
         />
       )}
@@ -203,6 +282,7 @@ function AnalyticsModal({
   marketId,
   bookmarkedAt,
   initialPrice,
+  initialTab,
   alertsQuery,
   onClose,
 }: {
@@ -210,6 +290,7 @@ function AnalyticsModal({
   marketId: string;
   bookmarkedAt: string;
   initialPrice: number | null;
+  initialTab?: 'analytics' | 'alerts';
   alertsQuery: ReturnType<typeof useAlerts>;
   onClose: () => void;
 }) {
@@ -298,7 +379,9 @@ function AnalyticsModal({
     plPct == null ? null : `${plPct > 0 ? '+' : ''}${plPct.toFixed(1)}%`;
   const modalTitle = market?.title ?? details?.title ?? 'Market analytics';
   const modalCategory = market?.category ?? details?.category ?? '';
-  const [activeTab, setActiveTab] = useState<'analytics' | 'alerts'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'alerts'>(
+    initialTab ?? 'analytics',
+  );
   const [enabled, setEnabled] = useState(true);
   const [profitInput, setProfitInput] = useState('');
   const [lossInput, setLossInput] = useState('');
@@ -319,6 +402,11 @@ function AnalyticsModal({
     );
     setMessage(null);
   }, [alertsQuery.data?.alerts, marketId]);
+
+  useEffect(() => {
+    if (!initialTab) return;
+    setActiveTab(initialTab);
+  }, [initialTab]);
 
   const parsePctInput = (value: string) => {
     const trimmed = value.trim();
