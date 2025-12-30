@@ -307,6 +307,19 @@ export default function HistoryPage() {
     [summary],
   );
 
+  const exportMeta = useMemo(() => {
+    const date = new Date(exportedAt);
+    return {
+      periodLabel: buildPeriodLabel(timeframe, date),
+      timeZoneLabel: getTimeZoneLabel(date),
+    };
+  }, [exportedAt, timeframe]);
+
+  const exportLogoSrc =
+    typeof window !== 'undefined'
+      ? `${window.location.origin}/polypicks-favicon.png`
+      : '/polypicks-favicon.png';
+
   const buildFileName = (ext: 'png' | 'pdf') => {
     const date = new Date().toISOString().slice(0, 10);
     return `polypicks-history-${timeframe}-${date}.${ext}`;
@@ -346,10 +359,6 @@ export default function HistoryPage() {
       const now = new Date(timestamp);
       const periodLabel = buildPeriodLabel(timeframe, now);
       const timeZoneLabel = getTimeZoneLabel(now);
-      const logoSrc =
-        typeof window !== 'undefined'
-          ? `${window.location.origin}/polypicks-favicon.png`
-          : '/polypicks-favicon.png';
       const instance = pdf(
         <HistoryPdf
           rows={exportRows}
@@ -358,7 +367,7 @@ export default function HistoryPage() {
           generatedAt={timestamp}
           periodLabel={periodLabel}
           timeZoneLabel={timeZoneLabel}
-          logoSrc={logoSrc}
+          logoSrc={exportLogoSrc}
         />,
       );
       const blob = await instance.toBlob();
@@ -603,6 +612,9 @@ export default function HistoryPage() {
           summary={exportSummary}
           userName={user?.name ?? null}
           generatedAt={exportedAt}
+          periodLabel={exportMeta.periodLabel}
+          timeZoneLabel={exportMeta.timeZoneLabel}
+          logoSrc={exportLogoSrc}
         />
       </div>
     </main>

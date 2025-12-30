@@ -3,7 +3,6 @@ import { EXPORT_BRAND } from './historyExportBrand';
 import {
   formatDate,
   formatPct,
-  formatPrice,
   formatSignedCents,
   formatTime,
   formatTimestamp,
@@ -15,16 +14,25 @@ type Props = {
   summary: HistoryExportSummary;
   userName?: string | null;
   generatedAt: string;
+  periodLabel: string;
+  timeZoneLabel: string;
+  logoSrc?: string | null;
+};
+
+const truncate = (s: string, max = 76) => {
+  const str = (s ?? '').trim();
+  if (str.length <= max) return str;
+  return `${str.slice(0, max - 3).trimEnd()}...`;
 };
 
 const statusStyles: Record<HistoryExportRow['status'], { bg: string; text: string }> = {
-  Closed: { bg: '#dcfce7', text: '#166534' },
-  Removed: { bg: '#fee2e2', text: '#991b1b' },
-  Active: { bg: '#dbeafe', text: '#1e40af' },
+  Closed: { bg: '#effaf3', text: '#166534' },
+  Removed: { bg: '#fef2f2', text: '#991b1b' },
+  Active: { bg: '#eff6ff', text: '#1e40af' },
 };
 
 export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
-  ({ rows, summary, userName, generatedAt }, ref) => {
+  ({ rows, summary, userName, generatedAt, periodLabel, timeZoneLabel, logoSrc }, ref) => {
     return (
       <div
         ref={ref}
@@ -38,22 +46,26 @@ export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
                 PolyPicks
               </div>
               <h1 className="mt-2 text-3xl font-semibold text-slate-900">
-                Trade History
+                Trade History Report
               </h1>
-              <p className="mt-1 text-sm text-slate-500">
-                {userName ? `${userName} · ` : ''}
-                {formatTimestamp(generatedAt)}
+              <p className="mt-2 text-sm text-slate-500">
+                <span className="font-semibold text-slate-900">
+                  User: {userName ?? 'Unknown'}{' '}
+                </span>
+                <span className="ml-3">Exported: {formatTimestamp(generatedAt)}</span>
+                <span className="ml-3">TZ: {timeZoneLabel}</span>
               </p>
+              <p className="mt-1 text-sm text-slate-500">Period: {periodLabel}</p>
             </div>
-            <div
-              className="flex h-12 w-12 items-center justify-center rounded-full text-white"
-              style={{ backgroundColor: EXPORT_BRAND.primary }}
-            >
-              <span className="text-xs font-semibold">PP</span>
-            </div>
+            {logoSrc ? (
+              <img src={logoSrc} alt="PolyPicks" className="h-7 w-7 object-contain" />
+            ) : (
+              <span className="text-xs font-semibold text-slate-600">PolyPicks</span>
+            )}
           </div>
+          <div className="mt-4 h-px w-full bg-slate-200" />
 
-          <div className="mt-8 grid grid-cols-4 gap-3">
+          <div className="mt-6 grid grid-cols-4 gap-3">
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">
                 Trades
@@ -74,35 +86,69 @@ export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
               <p className="text-[11px] uppercase tracking-wide text-slate-500">
                 Total P/L
               </p>
-              <p className="mt-1 text-lg font-semibold text-slate-900">
+              <p className="mt-1 text-lg font-semibold" style={{ color: EXPORT_BRAND.accent }}>
                 {formatSignedCents(summary.totalPL)}
               </p>
             </div>
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                Best / Worst
+                Net return
+              </p>
+              <p
+                className="mt-1 text-lg font-semibold"
+                style={{
+                  color:
+                    summary.netReturnPct != null && summary.netReturnPct > 0
+                      ? EXPORT_BRAND.accent
+                      : '#64748b',
+                }}
+              >
+                {summary.netReturnPct == null
+                  ? 'N/A'
+                  : `${summary.netReturnPct.toFixed(1)}%`}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                Best trade
               </p>
               <p className="mt-1 text-sm font-semibold text-slate-900">
                 {summary.best?.title ?? 'N/A'}
               </p>
               <p className="text-xs text-slate-500">
+                {summary.best?.returnPct != null
+                  ? formatPct(summary.best.returnPct)
+                  : 'N/A'}
+              </p>
+            </div>
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                Worst trade
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
                 {summary.worst?.title ?? 'N/A'}
+              </p>
+              <p className="text-xs text-slate-500">
+                {summary.worst?.returnPct != null
+                  ? formatPct(summary.worst.returnPct)
+                  : 'N/A'}
               </p>
             </div>
           </div>
 
-          <div className="mt-8 overflow-hidden rounded-xl border border-slate-200">
+          <div className="mt-6 overflow-hidden rounded-xl border border-slate-200">
             <table className="w-full text-left text-xs">
               <thead style={{ backgroundColor: EXPORT_BRAND.primary }} className="text-white">
                 <tr>
-                  <th className="px-3 py-2 font-semibold">Market</th>
-                  <th className="px-3 py-2 font-semibold">Category</th>
-                  <th className="px-3 py-2 font-semibold">Bookmarked</th>
-                  <th className="px-3 py-2 font-semibold">Entry</th>
-                  <th className="px-3 py-2 font-semibold">Final / Current</th>
-                  <th className="px-3 py-2 font-semibold">P/L</th>
-                  <th className="px-3 py-2 font-semibold">Return</th>
-                  <th className="px-3 py-2 font-semibold">Status</th>
+                  <th className="px-3 py-2 font-semibold w-[42%]">Market</th>
+                  <th className="px-3 py-2 font-semibold w-[10%]">Category</th>
+                  <th className="px-3 py-2 font-semibold w-[22%]">Bookmarked</th>
+                  <th className="px-3 py-2 font-semibold w-[10%] text-right">P/L</th>
+                  <th className="px-3 py-2 font-semibold w-[8%] text-right">Return</th>
+                  <th className="px-3 py-2 font-semibold w-[8%]">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -116,7 +162,7 @@ export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
                     >
                       <td className="px-3 py-2 align-top text-slate-900">
                         <div className="font-semibold break-words">
-                          {row.title ?? 'Unknown market'}
+                          {truncate(row.title ?? 'Unknown market', 72)}
                         </div>
                       </td>
                       <td className="px-3 py-2 align-top text-slate-600 break-words">
@@ -128,16 +174,10 @@ export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
                           {formatTime(row.createdAt)}
                         </div>
                       </td>
-                      <td className="px-3 py-2 align-top text-slate-700">
-                        {formatPrice(row.entryPrice)}
-                      </td>
-                      <td className="px-3 py-2 align-top text-slate-700">
-                        {formatPrice(row.latestPrice)}
-                      </td>
-                      <td className="px-3 py-2 align-top text-slate-700">
+                      <td className="px-3 py-2 align-top text-right text-slate-700">
                         {formatSignedCents(row.profitDelta)}
                       </td>
-                      <td className="px-3 py-2 align-top text-slate-700">
+                      <td className="px-3 py-2 align-top text-right text-slate-700">
                         {formatPct(row.returnPct)}
                       </td>
                       <td className="px-3 py-2 align-top">

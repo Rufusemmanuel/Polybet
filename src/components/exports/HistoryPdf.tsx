@@ -3,7 +3,6 @@ import { EXPORT_BRAND } from './historyExportBrand';
 import {
   formatDate,
   formatPct,
-  formatPrice,
   formatSignedCents,
   formatTime,
   formatTimestamp,
@@ -130,14 +129,12 @@ const styles = StyleSheet.create({
     borderBottom: `1px solid ${EXPORT_BRAND.border}`,
     minHeight: 32,
   },
-  cellMarket: { width: '34%' },
+  cellMarket: { width: '42%' },
   cellCategory: { width: '10%' },
-  cellBookmarked: { width: '18%' },
-  cellEntry: { width: '8%' },
-  cellFinal: { width: '8%' },
-  cellPL: { width: '8%' },
-  cellReturn: { width: '7%' },
-  cellStatus: { width: '7%' },
+  cellBookmarked: { width: '22%' },
+  cellPL: { width: '10%' },
+  cellReturn: { width: '8%' },
+  cellStatus: { width: '8%' },
   headerText: {
     fontSize: 9,
     fontWeight: 600,
@@ -281,10 +278,6 @@ export function HistoryPdf({
             <Text style={[styles.headerText, styles.cellMarket]}>Market</Text>
             <Text style={[styles.headerText, styles.cellCategory]}>Category</Text>
             <Text style={[styles.headerText, styles.cellBookmarked]}>Bookmarked</Text>
-            <Text style={[styles.headerText, styles.cellEntry, styles.alignRight]}>
-              Entry
-            </Text>
-            <Text style={[styles.headerText, styles.cellFinal, styles.alignRight]}>Final</Text>
             <Text style={[styles.headerText, styles.cellPL, styles.alignRight]}>P/L</Text>
             <Text style={[styles.headerText, styles.cellReturn, styles.alignRight]}>
               Return
@@ -307,12 +300,6 @@ export function HistoryPdf({
                   <Text style={styles.bodyText}>{formatDate(row.createdAt)}</Text>
                   <Text style={styles.bodyTextMuted}>{formatTime(row.createdAt)}</Text>
                 </View>
-                <Text style={[styles.bodyText, styles.cellEntry, styles.alignRight]}>
-                  {formatPrice(row.entryPrice)}
-                </Text>
-                <Text style={[styles.bodyText, styles.cellFinal, styles.alignRight]}>
-                  {formatPrice(row.latestPrice)}
-                </Text>
                 <Text style={[styles.bodyText, styles.cellPL, styles.alignRight]}>
                   {formatSignedCents(row.profitDelta)}
                 </Text>
