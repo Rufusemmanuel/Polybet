@@ -16,6 +16,7 @@ export type HistoryExportSummary = {
   count: number;
   winRate: number | null;
   totalPL: number;
+  netReturnPct: number | null;
   best: { title: string | null; returnPct: number | null } | null;
   worst: { title: string | null; returnPct: number | null } | null;
 };

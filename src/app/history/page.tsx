@@ -62,6 +62,37 @@ const formatPct = (value: number | null) => {
   return `${sign}${Math.abs(value).toFixed(1)}%`;
 };
 
+const formatPeriodDate = (date: Date) =>
+  new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  }).format(date);
+
+const getTimeZoneLabel = (date: Date) => {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZoneName: 'short' }).formatToParts(
+    date,
+  );
+  return parts.find((part) => part.type === 'timeZoneName')?.value ?? 'Local';
+};
+
+const buildPeriodLabel = (timeframe: string, now: Date) => {
+  if (timeframe === 'all') return 'All time';
+  const daysMap: Record<string, number> = {
+    '1d': 1,
+    '7d': 7,
+    '30d': 30,
+    '90d': 90,
+  };
+  const days = daysMap[timeframe];
+  if (!days) {
+    return `Up to ${formatPeriodDate(now)}`;
+  }
+  const start = new Date(now);
+  start.setDate(start.getDate() - days);
+  return `Last ${days} days (${formatPeriodDate(start)} - ${formatPeriodDate(now)})`;
+};
+
 type HistoryStatus = ExportStatus;
 
 const toHistoryStatus = (
@@ -222,6 +253,8 @@ export default function HistoryPage() {
     const wins = scored.filter((row) => (row.profitDelta ?? 0) > 0).length;
     const winRate = scored.length ? (wins / scored.length) * 100 : null;
     const totalPL = scored.reduce((sum, row) => sum + (row.profitDelta ?? 0), 0);
+    const totalEntry = scored.reduce((sum, row) => sum + row.entryPrice, 0);
+    const netReturnPct = totalEntry > 0 ? (totalPL / totalEntry) * 100 : null;
     const best = scored.reduce(
       (acc, row) =>
         acc && (acc.returnPct ?? 0) > (row.returnPct ?? 0) ? acc : row,
@@ -236,6 +269,7 @@ export default function HistoryPage() {
       count,
       winRate,
       totalPL,
+      netReturnPct,
       best,
       worst,
     };
@@ -262,6 +296,7 @@ export default function HistoryPage() {
       count: summary.count,
       winRate: summary.winRate,
       totalPL: summary.totalPL,
+      netReturnPct: summary.netReturnPct,
       best: summary.best
         ? { title: summary.best.title ?? null, returnPct: summary.best.returnPct ?? null }
         : null,
@@ -308,12 +343,22 @@ export default function HistoryPage() {
         import('@/components/exports/HistoryPdf'),
       ]);
       const timestamp = new Date().toISOString();
+      const now = new Date(timestamp);
+      const periodLabel = buildPeriodLabel(timeframe, now);
+      const timeZoneLabel = getTimeZoneLabel(now);
+      const logoSrc =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/polypicks-favicon.png`
+          : '/polypicks-favicon.png';
       const instance = pdf(
         <HistoryPdf
           rows={exportRows}
           summary={exportSummary}
           userName={user?.name ?? null}
           generatedAt={timestamp}
+          periodLabel={periodLabel}
+          timeZoneLabel={timeZoneLabel}
+          logoSrc={logoSrc}
         />,
       );
       const blob = await instance.toBlob();

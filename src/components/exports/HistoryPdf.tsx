@@ -1,4 +1,4 @@
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
+import { Document, Image, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
 import { EXPORT_BRAND } from './historyExportBrand';
 import {
   formatDate,
@@ -15,12 +15,15 @@ type Props = {
   summary: HistoryExportSummary;
   userName?: string | null;
   generatedAt: string;
+  periodLabel: string;
+  timeZoneLabel: string;
+  logoSrc?: string | null;
 };
 
-const truncate = (s: string, max = 64) => {
+const truncate = (s: string, max = 76) => {
   const str = (s ?? '').trim();
   if (str.length <= max) return str;
-  return `${str.slice(0, max - 1).trimEnd()}…`;
+  return `${str.slice(0, max - 3).trimEnd()}...`;
 };
 
 const styles = StyleSheet.create({
@@ -37,28 +40,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 10,
+    marginBottom: 6,
   },
   title: {
     fontSize: 28,
     fontWeight: 700,
     color: EXPORT_BRAND.text,
   },
-  subtitle: {
-    marginTop: 4,
+  metaLine: {
+    fontSize: 10,
     color: EXPORT_BRAND.textMuted,
-    fontSize: 11,
+    marginTop: 6,
+  },
+  metaStrong: {
+    color: EXPORT_BRAND.text,
   },
   badge: {
-    width: 28,
     height: 28,
-    borderRadius: 14,
-    backgroundColor: EXPORT_BRAND.primary,
-    color: 'white',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 9,
-    fontWeight: 700,
+    width: 28,
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  logo: {
+    height: 28,
+    width: 28,
+    objectFit: 'contain',
   },
   divider: {
     height: 1,
@@ -96,6 +102,9 @@ const styles = StyleSheet.create({
   summaryValueAccent: {
     color: EXPORT_BRAND.accent,
   },
+  summaryValueMuted: {
+    color: EXPORT_BRAND.textMuted,
+  },
   summarySubtle: {
     marginTop: 2,
     fontSize: 9,
@@ -121,21 +130,24 @@ const styles = StyleSheet.create({
     borderBottom: `1px solid ${EXPORT_BRAND.border}`,
     minHeight: 32,
   },
-  cellMarket: { width: '35%' },
+  cellMarket: { width: '34%' },
   cellCategory: { width: '10%' },
-  cellBookmarked: { width: '16%' },
+  cellBookmarked: { width: '18%' },
   cellEntry: { width: '8%' },
-  cellFinal: { width: '10%' },
+  cellFinal: { width: '8%' },
   cellPL: { width: '8%' },
-  cellReturn: { width: '8%' },
-  cellStatus: { width: '8%' },
+  cellReturn: { width: '7%' },
+  cellStatus: { width: '7%' },
   headerText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: 600,
   },
   bodyText: {
     fontSize: 10,
     color: '#334155',
+  },
+  bodyTextStrong: {
+    fontWeight: 600,
   },
   bodyTextMuted: {
     fontSize: 9,
@@ -170,7 +182,15 @@ const statusColors: Record<HistoryExportRow['status'], { bg: string; text: strin
   Active: { bg: '#eff6ff', text: '#1e40af' },
 };
 
-export function HistoryPdf({ rows, summary, userName, generatedAt }: Props) {
+export function HistoryPdf({
+  rows,
+  summary,
+  userName,
+  generatedAt,
+  periodLabel,
+  timeZoneLabel,
+  logoSrc,
+}: Props) {
   return (
     <Document>
       <Page size="A4" style={styles.page} wrap>
@@ -179,14 +199,21 @@ export function HistoryPdf({ rows, summary, userName, generatedAt }: Props) {
             <Text style={{ letterSpacing: 2, fontSize: 9, color: EXPORT_BRAND.textMuted }}>
               POLYPICKS
             </Text>
-            <Text style={styles.title}>Trade History</Text>
-            <Text style={styles.subtitle}>
-              {userName ? `${userName} - ` : ''}
-              {formatTimestamp(generatedAt)}
+            <Text style={styles.title}>Trade History Report</Text>
+            <Text style={styles.metaLine}>
+              <Text style={styles.metaStrong}>
+                User: {userName ?? 'Unknown'}{'  '}
+              </Text>
+              Exported: {formatTimestamp(generatedAt)}{'  '}TZ: {timeZoneLabel}
             </Text>
+            <Text style={styles.metaLine}>Period: {periodLabel}</Text>
           </View>
           <View style={styles.badge}>
-            <Text>PP</Text>
+            {logoSrc ? (
+              <Image src={logoSrc} style={styles.logo} />
+            ) : (
+              <Text style={styles.metaLine}>PolyPicks</Text>
+            )}
           </View>
         </View>
         <View style={styles.divider} />
@@ -206,6 +233,21 @@ export function HistoryPdf({ rows, summary, userName, generatedAt }: Props) {
             <Text style={styles.summaryLabel}>Total P/L</Text>
             <Text style={[styles.summaryValue, styles.summaryValueAccent]}>
               {formatSignedCents(summary.totalPL)}
+            </Text>
+          </View>
+          <View style={styles.summaryCard}>
+            <Text style={styles.summaryLabel}>Net return</Text>
+            <Text
+              style={[
+                styles.summaryValue,
+                summary.netReturnPct != null && summary.netReturnPct > 0
+                  ? styles.summaryValueAccent
+                  : styles.summaryValueMuted,
+              ]}
+            >
+              {summary.netReturnPct == null
+                ? 'N/A'
+                : `${summary.netReturnPct.toFixed(1)}%`}
             </Text>
           </View>
         </View>
@@ -242,9 +284,7 @@ export function HistoryPdf({ rows, summary, userName, generatedAt }: Props) {
             <Text style={[styles.headerText, styles.cellEntry, styles.alignRight]}>
               Entry
             </Text>
-            <Text style={[styles.headerText, styles.cellFinal, styles.alignRight]}>
-              Final/Current
-            </Text>
+            <Text style={[styles.headerText, styles.cellFinal, styles.alignRight]}>Final</Text>
             <Text style={[styles.headerText, styles.cellPL, styles.alignRight]}>P/L</Text>
             <Text style={[styles.headerText, styles.cellReturn, styles.alignRight]}>
               Return
@@ -257,7 +297,7 @@ export function HistoryPdf({ rows, summary, userName, generatedAt }: Props) {
             const statusStyle = statusColors[row.status];
             return (
               <View key={row.id} style={[styles.tableRow, { backgroundColor: stripe }]}>
-                <Text style={[styles.bodyText, styles.cellMarket]}>
+                <Text style={[styles.bodyText, styles.bodyTextStrong, styles.cellMarket]}>
                   {truncate(row.title ?? 'Unknown market', 72)}
                 </Text>
                 <Text style={[styles.bodyTextMuted, styles.cellCategory]}>
