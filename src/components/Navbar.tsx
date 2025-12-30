@@ -187,7 +187,7 @@ export function Navbar() {
                   )}
                 </button>
                 {isNotificationsOpen && (
-                  <div className="absolute right-0 mt-2 w-72 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
+                  <div className="absolute right-0 z-50 mt-2 w-72 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
                     <p className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
                       Alerts
                     </p>
@@ -233,7 +233,7 @@ export function Navbar() {
                   <span className="hidden sm:inline">{user.name}</span>
                 </button>
                 {isMenuOpen && (
-                  <div className="absolute right-0 mt-2 w-40 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
+                  <div className="absolute right-0 z-50 mt-2 w-40 rounded-xl border border-slate-800 bg-[#0f182c] p-2 text-sm shadow-xl">
                     <Link
                       href="/profile"
                       className="block rounded-lg px-3 py-2 text-slate-200 hover:bg-slate-800"

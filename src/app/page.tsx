@@ -221,7 +221,7 @@ function LiveMarketsOrb({
   isLoading: boolean;
 }) {
   return (
-    <div className="relative flex h-28 w-28 shrink-0 items-center justify-center">
+    <div className="fixed bottom-[calc(env(safe-area-inset-bottom)+16px)] right-4 z-40 flex h-28 w-28 shrink-0 items-center justify-center md:relative md:bottom-auto md:right-auto md:z-auto">
       <div
         aria-hidden
         className="absolute h-24 w-24 rounded-full bg-[#1f4bff] opacity-25 blur-md animate-ping"

@@ -56,6 +56,92 @@ const formatPct = (value: number | null) => {
   return `${sign}${Math.abs(value).toFixed(1)}%`;
 };
 
+type HistoryRow = HistoryBookmark & {
+  latestPrice: number | null;
+  profitDelta: number | null;
+  returnPct: number | null;
+  status: 'Removed' | 'Closed' | 'Active';
+};
+
+function TradeHistoryMobileCard({ row }: { row: HistoryRow }) {
+  const plClass =
+    row.profitDelta == null
+      ? 'text-slate-300'
+      : row.profitDelta > 0
+        ? 'text-emerald-300'
+        : row.profitDelta < 0
+          ? 'text-red-300'
+          : 'text-slate-200';
+  const statusClass =
+    row.status === 'Removed'
+      ? 'border-red-500/40 text-red-200'
+      : row.status === 'Closed'
+        ? 'border-emerald-500/40 text-emerald-200'
+        : 'border-blue-500/40 text-blue-200';
+
+  return (
+    <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-slate-100 break-words">
+            {row.title ?? 'Unknown market'}
+          </p>
+          <p className="mt-1 text-xs text-slate-400 break-words">
+            {row.category ?? 'Unknown'}
+          </p>
+        </div>
+        <span
+          className={`inline-flex min-h-[28px] items-center rounded-full border px-2.5 text-[11px] font-semibold ${statusClass}`}
+        >
+          {row.status}
+        </span>
+      </div>
+
+      <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+        <span className="text-slate-500">Bookmarked</span>
+        <span className="text-slate-200">
+          {new Date(row.createdAt).toLocaleDateString()} ·{' '}
+          <span className="text-slate-400">
+            {new Date(row.createdAt).toLocaleTimeString()}
+          </span>
+        </span>
+      </div>
+
+      <div className="mt-4 grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+        <div className="rounded-xl border border-slate-800 bg-[#111b33] px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Entry</p>
+          <p className="mt-1 text-sm font-semibold text-slate-100">
+            {formatPrice(row.entryPrice)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#111b33] px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">
+            Final / Current
+          </p>
+          <p className="mt-1 text-sm font-semibold text-slate-100">
+            {formatPrice(row.latestPrice)}
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 max-[380px]:grid-cols-1">
+        <div className="rounded-xl border border-slate-800 bg-[#111b33] px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">P/L</p>
+          <p className={`mt-1 text-sm font-semibold ${plClass}`}>
+            {formatSigned(row.profitDelta != null ? row.profitDelta * 100 : null)}
+          </p>
+        </div>
+        <div className="rounded-xl border border-slate-800 bg-[#111b33] px-3 py-2">
+          <p className="text-[11px] uppercase tracking-wide text-slate-400">Return</p>
+          <p className={`mt-1 text-sm font-semibold ${plClass}`}>
+            {formatPct(row.returnPct)}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function HistoryPage() {
   const sessionQuery = useSession();
   const user = sessionQuery.data?.user ?? null;
@@ -282,7 +368,7 @@ export default function HistoryPage() {
           </div>
 
           <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
                   History
@@ -291,12 +377,12 @@ export default function HistoryPage() {
                   <span className="text-xs text-slate-400">Loading...</span>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
                 <button
                   type="button"
                   onClick={exportAsPng}
                   disabled={isExporting != null}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isExporting === 'png' ? 'Exporting...' : 'Download PNG'}
                 </button>
@@ -304,7 +390,7 @@ export default function HistoryPage() {
                   type="button"
                   onClick={exportAsPdf}
                   disabled={isExporting != null}
-                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-slate-700 px-4 py-2.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
                 >
                   {isExporting === 'pdf' ? 'Exporting...' : 'Download PDF'}
                 </button>
@@ -324,77 +410,84 @@ export default function HistoryPage() {
             )}
 
             {rows.length > 0 && (
-              <div className="mt-4 overflow-x-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-                    <tr>
-                      <th className="px-3 py-2">Market</th>
-                      <th className="px-3 py-2">Bookmarked</th>
-                      <th className="px-3 py-2">Entry</th>
-                      <th className="px-3 py-2">Final / Current</th>
-                      <th className="px-3 py-2">P/L</th>
-                      <th className="px-3 py-2">Return</th>
-                      <th className="px-3 py-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {rows.map((row) => {
-                      const plClass =
-                        row.profitDelta == null
-                          ? 'text-slate-300'
-                          : row.profitDelta > 0
-                            ? 'text-emerald-300'
-                            : row.profitDelta < 0
-                              ? 'text-red-300'
-                              : 'text-slate-200';
-                      const statusClass =
-                        row.status === 'Removed'
-                          ? 'border-red-500/40 text-red-200'
-                          : row.status === 'Closed'
-                            ? 'border-emerald-500/40 text-emerald-200'
-                            : 'border-blue-500/40 text-blue-200';
-                      return (
-                        <tr key={row.id} className="hover:bg-[#111b33]">
-                          <td className="px-3 py-3">
-                            <div className="text-sm font-semibold text-slate-100">
-                              {row.title ?? 'Unknown market'}
-                            </div>
-                            <div className="text-xs text-slate-400">
-                              {row.category ?? 'Unknown'}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-slate-300">
-                            <div>{new Date(row.createdAt).toLocaleDateString()}</div>
-                            <div className="text-xs text-slate-500">
-                              {new Date(row.createdAt).toLocaleTimeString()}
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-slate-200">
-                            {formatPrice(row.entryPrice)}
-                          </td>
-                          <td className="px-3 py-3 text-slate-200">
-                            {formatPrice(row.latestPrice)}
-                          </td>
-                          <td className={`px-3 py-3 font-semibold ${plClass}`}>
-                            {formatSigned(
-                              row.profitDelta != null ? row.profitDelta * 100 : null,
-                            )}
-                          </td>
-                          <td className={`px-3 py-3 font-semibold ${plClass}`}>
-                            {formatPct(row.returnPct)}
-                          </td>
-                          <td className="px-3 py-3">
-                            <span
-                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}
-                            >
-                              {row.status}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-3 md:hidden">
+                  {rows.map((row) => (
+                    <TradeHistoryMobileCard key={row.id} row={row} />
+                  ))}
+                </div>
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="min-w-full text-sm">
+                    <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+                      <tr>
+                        <th className="px-3 py-2">Market</th>
+                        <th className="px-3 py-2">Bookmarked</th>
+                        <th className="px-3 py-2">Entry</th>
+                        <th className="px-3 py-2">Final / Current</th>
+                        <th className="px-3 py-2">P/L</th>
+                        <th className="px-3 py-2">Return</th>
+                        <th className="px-3 py-2">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {rows.map((row) => {
+                        const plClass =
+                          row.profitDelta == null
+                            ? 'text-slate-300'
+                            : row.profitDelta > 0
+                              ? 'text-emerald-300'
+                              : row.profitDelta < 0
+                                ? 'text-red-300'
+                                : 'text-slate-200';
+                        const statusClass =
+                          row.status === 'Removed'
+                            ? 'border-red-500/40 text-red-200'
+                            : row.status === 'Closed'
+                              ? 'border-emerald-500/40 text-emerald-200'
+                              : 'border-blue-500/40 text-blue-200';
+                        return (
+                          <tr key={row.id} className="hover:bg-[#111b33]">
+                            <td className="px-3 py-3">
+                              <div className="text-sm font-semibold text-slate-100">
+                                {row.title ?? 'Unknown market'}
+                              </div>
+                              <div className="text-xs text-slate-400">
+                                {row.category ?? 'Unknown'}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-slate-300">
+                              <div>{new Date(row.createdAt).toLocaleDateString()}</div>
+                              <div className="text-xs text-slate-500">
+                                {new Date(row.createdAt).toLocaleTimeString()}
+                              </div>
+                            </td>
+                            <td className="px-3 py-3 text-slate-200">
+                              {formatPrice(row.entryPrice)}
+                            </td>
+                            <td className="px-3 py-3 text-slate-200">
+                              {formatPrice(row.latestPrice)}
+                            </td>
+                            <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                              {formatSigned(
+                                row.profitDelta != null ? row.profitDelta * 100 : null,
+                              )}
+                            </td>
+                            <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                              {formatPct(row.returnPct)}
+                            </td>
+                            <td className="px-3 py-3">
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}
+                              >
+                                {row.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
