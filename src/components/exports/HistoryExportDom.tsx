@@ -90,24 +90,6 @@ export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(
                 {formatSignedCents(summary.totalPL)}
               </p>
             </div>
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-              <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                Net return
-              </p>
-              <p
-                className="mt-1 text-lg font-semibold"
-                style={{
-                  color:
-                    summary.netReturnPct != null && summary.netReturnPct > 0
-                      ? EXPORT_BRAND.accent
-                      : '#64748b',
-                }}
-              >
-                {summary.netReturnPct == null
-                  ? 'N/A'
-                  : `${summary.netReturnPct.toFixed(1)}%`}
-              </p>
-            </div>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-3">

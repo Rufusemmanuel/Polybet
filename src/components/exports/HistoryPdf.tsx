@@ -19,20 +19,23 @@ type Props = {
   logoSrc?: string | null;
 };
 
-const truncate = (s: string, max = 76) => {
+const truncate = (s: string, max = 68) => {
   const str = (s ?? '').trim();
   if (str.length <= max) return str;
-  return `${str.slice(0, max - 3).trimEnd()}...`;
+  return `${str.slice(0, max - 1).trimEnd()}…`;
 };
 
 const COL_WIDTHS = {
-  market: '40%',
+  market: '44%',
   category: '10%',
   bookmarked: '20%',
   pl: '10%',
-  returnPct: '10%',
-  status: '10%',
+  returnPct: '8%',
+  status: '8%',
 } as const;
+
+const formatStatus = (status: HistoryExportRow['status']) =>
+  status === 'Removed' ? 'Re\u2060moved' : status;
 
 const styles = StyleSheet.create({
   page: {
@@ -110,9 +113,6 @@ const styles = StyleSheet.create({
   summaryValueAccent: {
     color: EXPORT_BRAND.accent,
   },
-  summaryValueMuted: {
-    color: EXPORT_BRAND.textMuted,
-  },
   summarySubtle: {
     marginTop: 2,
     fontSize: 9,
@@ -152,8 +152,9 @@ const styles = StyleSheet.create({
   cellReturn: { width: COL_WIDTHS.returnPct },
   cellStatus: { width: COL_WIDTHS.status },
   headerText: {
-    fontSize: 9.5,
+    fontSize: 9,
     fontWeight: 700,
+    letterSpacing: 0.2,
   },
   bodyText: {
     fontSize: 10,
@@ -161,6 +162,7 @@ const styles = StyleSheet.create({
   },
   bodyTextStrong: {
     fontWeight: 600,
+    lineHeight: 13.5,
   },
   bodyTextMuted: {
     fontSize: 8.5,
@@ -171,16 +173,19 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: 600,
   },
+  alignRightRow: {
+    alignItems: 'flex-end',
+  },
   alignRight: {
     textAlign: 'right',
   },
   statusPill: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
     borderRadius: 999,
-    fontSize: 8.5,
+    fontSize: 8,
     fontWeight: 600,
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end',
     textAlign: 'center',
   },
   footer: {
@@ -254,21 +259,6 @@ export function HistoryPdf({
               {formatSignedCents(summary.totalPL)}
             </Text>
           </View>
-          <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Net return</Text>
-            <Text
-              style={[
-                styles.summaryValue,
-                summary.netReturnPct != null && summary.netReturnPct > 0
-                  ? styles.summaryValueAccent
-                  : styles.summaryValueMuted,
-              ]}
-            >
-              {summary.netReturnPct == null
-                ? 'N/A'
-                : `${summary.netReturnPct.toFixed(1)}%`}
-            </Text>
-          </View>
         </View>
         <View style={styles.summaryRowSplit}>
           <View style={styles.summaryCard}>
@@ -296,7 +286,7 @@ export function HistoryPdf({
         </View>
 
         <View style={styles.table}>
-          <View style={styles.tableHeader} fixed>
+          <View style={[styles.tableHeader, { width: '100%' }]} fixed>
             <View style={[styles.headerCell, styles.cellMarket]}>
               <Text style={styles.headerText}>Market</Text>
             </View>
@@ -321,10 +311,13 @@ export function HistoryPdf({
             const stripe = index % 2 === 0 ? EXPORT_BRAND.stripe : 'white';
             const statusStyle = statusColors[row.status];
             return (
-              <View key={row.id} style={[styles.tableRow, { backgroundColor: stripe }]}>
-                <View style={[styles.bodyCell, styles.cellMarket]}>
+              <View
+                key={row.id}
+                style={[styles.tableRow, { backgroundColor: stripe, width: '100%' }]}
+              >
+                <View style={[styles.bodyCell, styles.cellMarket, { paddingRight: 14 }]}>
                   <Text style={[styles.bodyText, styles.bodyTextStrong]}>
-                    {truncate(row.title ?? 'Unknown market', 72)}
+                    {truncate(row.title ?? 'Unknown market', 68)}
                   </Text>
                 </View>
                 <View style={[styles.bodyCell, styles.cellCategory]}>
@@ -334,24 +327,24 @@ export function HistoryPdf({
                   <Text style={styles.bodyTextSmall}>{formatDate(row.createdAt)}</Text>
                   <Text style={styles.bodyTextMuted}>{formatTime(row.createdAt)}</Text>
                 </View>
-                <View style={[styles.bodyCell, styles.cellPL]}>
+                <View style={[styles.bodyCell, styles.cellPL, styles.alignRightRow]}>
                   <Text style={[styles.bodyText, styles.alignRight]}>
                     {formatSignedCents(row.profitDelta)}
                   </Text>
                 </View>
-                <View style={[styles.bodyCell, styles.cellReturn]}>
+                <View style={[styles.bodyCell, styles.cellReturn, styles.alignRightRow]}>
                   <Text style={[styles.bodyText, styles.alignRight]}>
                     {formatPct(row.returnPct)}
                   </Text>
                 </View>
-                <View style={[styles.bodyCell, styles.cellStatus, { alignItems: 'flex-start' }]}>
+                <View style={[styles.bodyCell, styles.cellStatus, styles.alignRightRow]}>
                   <Text
                     style={[
                       styles.statusPill,
                       { backgroundColor: statusStyle.bg, color: statusStyle.text },
                     ]}
                   >
-                    {row.status}
+                    {formatStatus(row.status)}
                   </Text>
                 </View>
               </View>
