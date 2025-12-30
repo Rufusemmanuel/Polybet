@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/useSession';
@@ -60,9 +60,11 @@ export default function HistoryPage() {
   const sessionQuery = useSession();
   const user = sessionQuery.data?.user ?? null;
   const router = useRouter();
+  const exportRef = useRef<HTMLDivElement | null>(null);
   const [timeframe, setTimeframe] = useState<(typeof TIMEFRAMES)[number]['value']>(
     'all',
   );
+  const [isExporting, setIsExporting] = useState<null | 'png' | 'pdf'>(null);
 
   useEffect(() => {
     if (sessionQuery.isLoading) return;
@@ -113,9 +115,6 @@ export default function HistoryPage() {
     );
     const wins = scored.filter((row) => (row.profitDelta ?? 0) > 0).length;
     const winRate = scored.length ? (wins / scored.length) * 100 : null;
-    const avgReturn = scored.length
-      ? scored.reduce((sum, row) => sum + (row.returnPct ?? 0), 0) / scored.length
-      : null;
     const totalPL = scored.reduce((sum, row) => sum + (row.profitDelta ?? 0), 0);
     const best = scored.reduce(
       (acc, row) =>
@@ -130,12 +129,59 @@ export default function HistoryPage() {
     return {
       count,
       winRate,
-      avgReturn,
       totalPL,
       best,
       worst,
     };
   }, [rows]);
+
+  const buildFileName = (ext: 'png' | 'pdf') => {
+    const date = new Date().toISOString().slice(0, 10);
+    return `polypicks-history-${timeframe}-${date}.${ext}`;
+  };
+
+  const exportAsPng = async () => {
+    if (!exportRef.current) return;
+    setIsExporting('png');
+    try {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(exportRef.current, {
+        cacheBust: true,
+        backgroundColor: '#0b1224',
+      });
+      const link = document.createElement('a');
+      link.href = dataUrl;
+      link.download = buildFileName('png');
+      link.click();
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const exportAsPdf = async () => {
+    if (!exportRef.current) return;
+    setIsExporting('pdf');
+    try {
+      const { toPng } = await import('html-to-image');
+      const dataUrl = await toPng(exportRef.current, {
+        cacheBust: true,
+        backgroundColor: '#0b1224',
+      });
+      const image = new Image();
+      const imageLoaded = new Promise<{ width: number; height: number }>((resolve) => {
+        image.onload = () => resolve({ width: image.width, height: image.height });
+      });
+      image.src = dataUrl;
+      const { width, height } = await imageLoaded;
+      const { jsPDF } = await import('jspdf');
+      const orientation = width >= height ? 'landscape' : 'portrait';
+      const pdf = new jsPDF({ orientation, unit: 'px', format: [width, height] });
+      pdf.addImage(dataUrl, 'PNG', 0, 0, width, height);
+      pdf.save(buildFileName('pdf'));
+    } finally {
+      setIsExporting(null);
+    }
+  };
 
   if (!user) {
     return (
@@ -181,154 +227,177 @@ export default function HistoryPage() {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-5">
-          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Trades</p>
-            <p className="mt-2 text-2xl font-semibold">{summary.count}</p>
+        <div ref={exportRef} className="space-y-6">
+          <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-5">
+            <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Trades</p>
+              <p className="mt-2 text-2xl font-semibold">{summary.count}</p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Win rate</p>
+              <p className="mt-2 text-2xl font-semibold">
+                {summary.winRate == null ? 'N/A' : `${summary.winRate.toFixed(1)}%`}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Total P/L</p>
+              <p
+                className={`mt-2 text-2xl font-semibold ${
+                  summary.totalPL > 0
+                    ? 'text-emerald-300'
+                    : summary.totalPL < 0
+                      ? 'text-red-300'
+                      : 'text-slate-100'
+                }`}
+              >
+                {formatSigned(summary.totalPL * 100)}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4 md:col-span-2 lg:col-span-2">
+              <div className="flex items-center justify-between">
+                <p className="text-xs uppercase tracking-wide text-slate-400">Best trade</p>
+                <span className="text-xs text-slate-500">
+                  {summary.best?.returnPct != null
+                    ? formatPct(summary.best.returnPct)
+                    : 'N/A'}
+                </span>
+              </div>
+              <p className="mt-2 text-sm text-slate-100">
+                {summary.best?.title ?? 'N/A'}
+              </p>
+              <p className="mt-4 text-xs uppercase tracking-wide text-slate-400">
+                Worst trade
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-4">
+                <p className="text-sm text-slate-200">
+                  {summary.worst?.title ?? 'N/A'}
+                </p>
+                <span className="text-xs text-slate-500">
+                  {summary.worst?.returnPct != null
+                    ? formatPct(summary.worst.returnPct)
+                    : 'N/A'}
+                </span>
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Win rate</p>
-            <p className="mt-2 text-2xl font-semibold">
-              {summary.winRate == null ? 'N/A' : `${summary.winRate.toFixed(1)}%`}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Avg return</p>
-            <p className="mt-2 text-2xl font-semibold">
-              {summary.avgReturn == null ? 'N/A' : formatPct(summary.avgReturn)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Total P/L</p>
-            <p
-              className={`mt-2 text-2xl font-semibold ${
-                summary.totalPL > 0
-                  ? 'text-emerald-300'
-                  : summary.totalPL < 0
-                    ? 'text-red-300'
-                    : 'text-slate-100'
-              }`}
-            >
-              {formatSigned(summary.totalPL * 100)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Best / Worst</p>
-            <p className="mt-2 text-sm text-slate-200">
-              {summary.best?.title ?? 'N/A'}
-            </p>
-            <p className="text-xs text-slate-500">
-              {summary.best?.returnPct != null
-                ? formatPct(summary.best.returnPct)
-                : 'N/A'}
-            </p>
-            <p className="mt-3 text-sm text-slate-200">
-              {summary.worst?.title ?? 'N/A'}
-            </p>
-            <p className="text-xs text-slate-500">
-              {summary.worst?.returnPct != null
-                ? formatPct(summary.worst.returnPct)
-                : 'N/A'}
-            </p>
-          </div>
-        </div>
 
-        <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              History
-            </h2>
-            {historyQuery.isLoading && (
-              <span className="text-xs text-slate-400">Loading...</span>
+          <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-6">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+                  History
+                </h2>
+                {historyQuery.isLoading && (
+                  <span className="text-xs text-slate-400">Loading...</span>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={exportAsPng}
+                  disabled={isExporting != null}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isExporting === 'png' ? 'Exporting...' : 'Download PNG'}
+                </button>
+                <button
+                  type="button"
+                  onClick={exportAsPdf}
+                  disabled={isExporting != null}
+                  className="inline-flex items-center gap-2 rounded-full border border-slate-700 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isExporting === 'pdf' ? 'Exporting...' : 'Download PDF'}
+                </button>
+              </div>
+            </div>
+
+            {historyQuery.isError && (
+              <p className="mt-4 text-sm text-red-300">
+                Unable to load history. Please try again.
+              </p>
+            )}
+
+            {!historyQuery.isLoading && rows.length === 0 && (
+              <p className="mt-4 text-sm text-slate-400">
+                No bookmarked trades in this timeframe.
+              </p>
+            )}
+
+            {rows.length > 0 && (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
+                    <tr>
+                      <th className="px-3 py-2">Market</th>
+                      <th className="px-3 py-2">Bookmarked</th>
+                      <th className="px-3 py-2">Entry</th>
+                      <th className="px-3 py-2">Final / Current</th>
+                      <th className="px-3 py-2">P/L</th>
+                      <th className="px-3 py-2">Return</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800">
+                    {rows.map((row) => {
+                      const plClass =
+                        row.profitDelta == null
+                          ? 'text-slate-300'
+                          : row.profitDelta > 0
+                            ? 'text-emerald-300'
+                            : row.profitDelta < 0
+                              ? 'text-red-300'
+                              : 'text-slate-200';
+                      const statusClass =
+                        row.status === 'Removed'
+                          ? 'border-red-500/40 text-red-200'
+                          : row.status === 'Closed'
+                            ? 'border-emerald-500/40 text-emerald-200'
+                            : 'border-blue-500/40 text-blue-200';
+                      return (
+                        <tr key={row.id} className="hover:bg-[#111b33]">
+                          <td className="px-3 py-3">
+                            <div className="text-sm font-semibold text-slate-100">
+                              {row.title ?? 'Unknown market'}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {row.category ?? 'Unknown'}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-slate-300">
+                            <div>{new Date(row.createdAt).toLocaleDateString()}</div>
+                            <div className="text-xs text-slate-500">
+                              {new Date(row.createdAt).toLocaleTimeString()}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 text-slate-200">
+                            {formatPrice(row.entryPrice)}
+                          </td>
+                          <td className="px-3 py-3 text-slate-200">
+                            {formatPrice(row.latestPrice)}
+                          </td>
+                          <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                            {formatSigned(
+                              row.profitDelta != null ? row.profitDelta * 100 : null,
+                            )}
+                          </td>
+                          <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                            {formatPct(row.returnPct)}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span
+                              className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}
+                            >
+                              {row.status}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
-
-          {historyQuery.isError && (
-            <p className="mt-4 text-sm text-red-300">
-              Unable to load history. Please try again.
-            </p>
-          )}
-
-          {!historyQuery.isLoading && rows.length === 0 && (
-            <p className="mt-4 text-sm text-slate-400">
-              No bookmarked trades in this timeframe.
-            </p>
-          )}
-
-          {rows.length > 0 && (
-            <div className="mt-4 overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="text-left text-xs uppercase tracking-wide text-slate-400">
-                  <tr>
-                    <th className="px-3 py-2">Market</th>
-                    <th className="px-3 py-2">Bookmarked</th>
-                    <th className="px-3 py-2">Entry</th>
-                    <th className="px-3 py-2">Final / Current</th>
-                    <th className="px-3 py-2">P/L</th>
-                    <th className="px-3 py-2">Return</th>
-                    <th className="px-3 py-2">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {rows.map((row) => {
-                    const plClass =
-                      row.profitDelta == null
-                        ? 'text-slate-300'
-                        : row.profitDelta > 0
-                          ? 'text-emerald-300'
-                          : row.profitDelta < 0
-                            ? 'text-red-300'
-                            : 'text-slate-200';
-                    const statusClass =
-                      row.status === 'Removed'
-                        ? 'border-red-500/40 text-red-200'
-                        : row.status === 'Closed'
-                          ? 'border-emerald-500/40 text-emerald-200'
-                          : 'border-blue-500/40 text-blue-200';
-                    return (
-                      <tr key={row.id} className="hover:bg-[#111b33]">
-                        <td className="px-3 py-3">
-                          <div className="text-sm font-semibold text-slate-100">
-                            {row.title ?? 'Unknown market'}
-                          </div>
-                          <div className="text-xs text-slate-400">
-                            {row.category ?? 'Unknown'}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-300">
-                          <div>{new Date(row.createdAt).toLocaleDateString()}</div>
-                          <div className="text-xs text-slate-500">
-                            {new Date(row.createdAt).toLocaleTimeString()}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-200">
-                          {formatPrice(row.entryPrice)}
-                        </td>
-                        <td className="px-3 py-3 text-slate-200">
-                          {formatPrice(row.latestPrice)}
-                        </td>
-                        <td className={`px-3 py-3 font-semibold ${plClass}`}>
-                          {formatSigned(
-                            row.profitDelta != null ? row.profitDelta * 100 : null,
-                          )}
-                        </td>
-                        <td className={`px-3 py-3 font-semibold ${plClass}`}>
-                          {formatPct(row.returnPct)}
-                        </td>
-                        <td className="px-3 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${statusClass}`}
-                          >
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       </div>
     </main>
