@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { getMarketDetails } from '@/lib/polymarket/api';
 import { getUserFromRequest } from '@/lib/auth';
 
 export const runtime = 'nodejs';
@@ -149,6 +150,19 @@ export async function POST(request: NextRequest) {
     const marketId = body.marketId?.trim();
     if (!marketId) {
       return NextResponse.json({ error: 'Missing marketId' }, { status: 400 });
+    }
+
+    const market = await getMarketDetails(marketId);
+    if (market) {
+      const now = Date.now();
+      const isClosed =
+        market.endDate.getTime() <= now || Boolean(market.closedTime);
+      if (isClosed) {
+        return NextResponse.json(
+          { error: 'Alerts are disabled for closed markets.' },
+          { status: 409 },
+        );
+      }
     }
 
     const profitThresholdPct = normalizePct(body.profitThresholdPct);

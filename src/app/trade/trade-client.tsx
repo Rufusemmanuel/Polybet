@@ -368,6 +368,10 @@ function AnalyticsModal({
   const [activeTab, setActiveTab] = useState<'analytics' | 'alerts'>(
     initialTab ?? 'analytics',
   );
+  const existingAlert = alertsQuery.data?.alerts.find(
+    (item) => item.marketId === marketId,
+  );
+  const alertsDisabled = isClosed;
   const [enabled, setEnabled] = useState(true);
   const [profitInput, setProfitInput] = useState('');
   const [lossInput, setLossInput] = useState('');
@@ -376,18 +380,25 @@ function AnalyticsModal({
   const [message, setMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const alert = alertsQuery.data?.alerts.find((item) => item.marketId === marketId);
-    setEnabled(alert?.enabled ?? true);
+    setEnabled(existingAlert?.enabled ?? true);
     setProfitInput(
-      alert?.profitThresholdPct != null ? String(alert.profitThresholdPct) : '',
+      existingAlert?.profitThresholdPct != null
+        ? String(existingAlert.profitThresholdPct)
+        : '',
     );
-    setLossInput(alert?.lossThresholdPct != null ? String(alert.lossThresholdPct) : '');
-    setTriggerOnce(alert?.triggerOnce ?? true);
+    setLossInput(
+      existingAlert?.lossThresholdPct != null
+        ? String(existingAlert.lossThresholdPct)
+        : '',
+    );
+    setTriggerOnce(existingAlert?.triggerOnce ?? true);
     setCooldownInput(
-      alert?.cooldownMinutes != null ? String(alert.cooldownMinutes) : '60',
+      existingAlert?.cooldownMinutes != null
+        ? String(existingAlert.cooldownMinutes)
+        : '60',
     );
     setMessage(null);
-  }, [alertsQuery.data?.alerts, marketId]);
+  }, [existingAlert, marketId]);
 
   useEffect(() => {
     if (!initialTab) return;
@@ -586,11 +597,17 @@ function AnalyticsModal({
 
         {activeTab === 'alerts' && (
           <div className="mt-5 space-y-4 text-sm">
+            {alertsDisabled && (
+              <p className="rounded-lg border border-slate-700/60 bg-slate-800/40 px-3 py-2 text-xs text-slate-300">
+                Alerts are disabled for closed markets.
+              </p>
+            )}
             <label className="flex items-center justify-between rounded-xl border border-slate-800 bg-[#0f182c] px-4 py-3">
               <span className="text-sm text-slate-200">Alerts enabled</span>
               <input
                 type="checkbox"
                 checked={enabled}
+                disabled={alertsDisabled}
                 onChange={(event) => setEnabled(event.target.checked)}
                 className="h-4 w-4 accent-blue-500"
               />
@@ -605,6 +622,7 @@ function AnalyticsModal({
                 min="0"
                 step="0.1"
                 value={profitInput}
+                disabled={alertsDisabled}
                 onChange={(event) => setProfitInput(event.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none"
                 placeholder="e.g. 25"
@@ -620,6 +638,7 @@ function AnalyticsModal({
                 min="0"
                 step="0.1"
                 value={lossInput}
+                disabled={alertsDisabled}
                 onChange={(event) => setLossInput(event.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none"
                 placeholder="e.g. 10"
@@ -634,6 +653,7 @@ function AnalyticsModal({
                 <button
                   type="button"
                   onClick={() => setTriggerOnce(true)}
+                  disabled={alertsDisabled}
                   className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold ${
                     triggerOnce
                       ? 'border-blue-400 text-blue-100'
@@ -645,6 +665,7 @@ function AnalyticsModal({
                 <button
                   type="button"
                   onClick={() => setTriggerOnce(false)}
+                  disabled={alertsDisabled}
                   className={`flex-1 rounded-full border px-3 py-2 text-xs font-semibold ${
                     !triggerOnce
                       ? 'border-blue-400 text-blue-100'
@@ -665,6 +686,7 @@ function AnalyticsModal({
                 min="1"
                 step="1"
                 value={cooldownInput}
+                disabled={alertsDisabled}
                 onChange={(event) => setCooldownInput(event.target.value)}
                 className="w-full rounded-lg border border-slate-700 bg-transparent px-3 py-2 text-sm text-slate-100 placeholder:text-slate-500 focus:border-blue-400 focus:outline-none"
                 placeholder="60"
@@ -677,7 +699,7 @@ function AnalyticsModal({
               <button
                 type="button"
                 onClick={handleSaveAlerts}
-                disabled={alertsQuery.isSaving}
+                disabled={alertsDisabled || alertsQuery.isSaving}
                 className="flex-1 rounded-full border border-blue-500/60 px-4 py-2 text-xs font-semibold text-blue-100 transition hover:border-blue-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {alertsQuery.isSaving ? 'Saving...' : 'Save alerts'}
@@ -685,7 +707,7 @@ function AnalyticsModal({
               <button
                 type="button"
                 onClick={handleDeleteAlerts}
-                disabled={alertsQuery.isDeleting}
+                disabled={alertsQuery.isDeleting || !existingAlert}
                 className="flex-1 rounded-full border border-red-500/60 px-4 py-2 text-xs font-semibold text-red-200 transition hover:border-red-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {alertsQuery.isDeleting ? 'Deleting...' : 'Delete'}
