@@ -3,7 +3,11 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 import { getMarketDetails } from '@/lib/polymarket/api';
-import { inferBookmarkOutcome } from '@/lib/polymarket/settlement';
+import {
+  findOutcomeIndex,
+  inferOutcomeFromEntryPrice,
+  resolveLeadingOutcome,
+} from '@/lib/polymarket/settlement';
 
 type BookmarkPayload = {
   marketId?: string;
@@ -15,75 +19,25 @@ type BookmarkPayload = {
   outcomeLabel?: string | null;
 };
 
-const normalizeLabel = (value: string | null | undefined) =>
-  value ? value.trim().toLowerCase() : null;
-
-const resolveSelectedOutcome = ({
-  outcomeId,
-  outcomeLabel,
-  market,
-}: {
-  outcomeId: string | null;
-  outcomeLabel: string | null;
-  market: Awaited<ReturnType<typeof getMarketDetails>> | null;
-}) => {
-  const labels = market?.outcomes ?? [];
-  const tokenIds = market?.outcomeTokenIds ?? [];
-  let resolvedOutcomeId = outcomeId;
-  let resolvedOutcomeLabel = outcomeLabel;
-
-  if (!resolvedOutcomeLabel && resolvedOutcomeId && tokenIds.length && labels.length) {
-    const idx = tokenIds.findIndex((id) => id === resolvedOutcomeId);
-    resolvedOutcomeLabel = idx >= 0 ? labels[idx] ?? null : null;
-  }
-
-  if (!resolvedOutcomeId && resolvedOutcomeLabel && tokenIds.length && labels.length) {
-    const normalized = normalizeLabel(resolvedOutcomeLabel);
-    const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
-    resolvedOutcomeId = idx >= 0 ? tokenIds[idx] ?? null : null;
-  }
-
-  if (!resolvedOutcomeLabel && market?.price.leadingOutcome) {
-    resolvedOutcomeLabel = market.price.leadingOutcome;
-  }
-
-  if (!resolvedOutcomeId && resolvedOutcomeLabel && tokenIds.length && labels.length) {
-    const normalized = normalizeLabel(resolvedOutcomeLabel);
-    const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
-    resolvedOutcomeId = idx >= 0 ? tokenIds[idx] ?? null : null;
-  }
-
-  return { outcomeId: resolvedOutcomeId, outcomeLabel: resolvedOutcomeLabel };
-};
-
-const resolveOutcomeEntryPrice = ({
+const resolveYesNoOutcome = ({
   entryPrice,
-  outcomeId,
-  outcomeLabel,
-  market,
+  outcomeLabels,
+  outcomeTokenIds,
 }: {
   entryPrice: number;
-  outcomeId: string | null;
-  outcomeLabel: string | null;
-  market: Awaited<ReturnType<typeof getMarketDetails>> | null;
+  outcomeLabels: string[] | null;
+  outcomeTokenIds: string[] | null;
 }) => {
-  const labels = market?.outcomes ?? [];
-  const prices = market?.outcomePrices ?? [];
-  const tokenIds = market?.outcomeTokenIds ?? [];
-  if (labels.length && prices.length) {
-    if (outcomeId && tokenIds.length) {
-      const idx = tokenIds.findIndex((id) => id === outcomeId);
-      const price = idx >= 0 ? prices[idx] : null;
-      if (typeof price === 'number' && Number.isFinite(price)) return price;
-    }
-    if (outcomeLabel) {
-      const normalized = normalizeLabel(outcomeLabel);
-      const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
-      const price = idx >= 0 ? prices[idx] : null;
-      if (typeof price === 'number' && Number.isFinite(price)) return price;
-    }
-  }
-  return entryPrice;
+  if (!outcomeLabels?.length) return null;
+  const yesIdx = findOutcomeIndex(outcomeLabels, 'Yes');
+  const noIdx = findOutcomeIndex(outcomeLabels, 'No');
+  if (yesIdx == null || noIdx == null) return null;
+  const useYes = entryPrice >= 0.5;
+  const idx = useYes ? yesIdx : noIdx;
+  return {
+    outcomeId: outcomeTokenIds?.[idx] ?? null,
+    outcomeLabel: outcomeLabels[idx] ?? null,
+  };
 };
 
 export async function GET(request: NextRequest) {
@@ -138,12 +92,16 @@ export async function GET(request: NextRequest) {
         const inferred =
           b.outcomeId || b.outcomeLabel
             ? null
-            : inferBookmarkOutcome({
+            : inferOutcomeFromEntryPrice({
                 entryPrice: b.entryPrice,
                 outcomeLabels: market?.outcomes ?? null,
                 outcomePrices: market?.outcomePrices ?? null,
                 outcomeTokenIds: market?.outcomeTokenIds ?? null,
-                fallbackLabel: market?.price.leadingOutcome ?? null,
+              }) ??
+              resolveYesNoOutcome({
+                entryPrice: b.entryPrice,
+                outcomeLabels: market?.outcomes ?? null,
+                outcomeTokenIds: market?.outcomeTokenIds ?? null,
               });
         const outcomeId = b.outcomeId ?? inferred?.outcomeId ?? null;
         const outcomeLabel = b.outcomeLabel ?? inferred?.outcomeLabel ?? null;
@@ -204,8 +162,6 @@ export async function POST(request: NextRequest) {
     const title = body.title?.trim() || null;
     const category = body.category?.trim() || null;
     const marketUrl = body.marketUrl?.trim() || null;
-    const rawOutcomeId = body.outcomeId?.trim() || null;
-    const rawOutcomeLabel = body.outcomeLabel?.trim() || null;
     if (!marketId) {
       return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
     }
@@ -219,17 +175,20 @@ export async function POST(request: NextRequest) {
     } catch {
       market = null;
     }
-    const resolvedOutcome = resolveSelectedOutcome({
-      outcomeId: rawOutcomeId,
-      outcomeLabel: rawOutcomeLabel,
-      market,
+    if (!market) {
+      return NextResponse.json({ error: 'Market not found' }, { status: 404 });
+    }
+    const leading = resolveLeadingOutcome({
+      outcomeLabels: market.outcomes ?? null,
+      outcomePrices: market.outcomePrices ?? null,
+      outcomeTokenIds: market.outcomeTokenIds ?? null,
     });
-    const resolvedEntryPrice = resolveOutcomeEntryPrice({
-      entryPrice,
-      outcomeId: resolvedOutcome.outcomeId,
-      outcomeLabel: resolvedOutcome.outcomeLabel,
-      market,
-    });
+    const resolvedOutcomeId = leading.outcomeId;
+    const resolvedOutcomeLabel = leading.outcomeLabel ?? market.price.leadingOutcome ?? null;
+    const resolvedEntryPrice =
+      typeof leading.price === 'number' && Number.isFinite(leading.price)
+        ? leading.price
+        : market.price.price;
 
     const updateData = {
       entryPrice: resolvedEntryPrice,
@@ -238,8 +197,8 @@ export async function POST(request: NextRequest) {
       ...(title ? { title } : {}),
       ...(category ? { category } : {}),
       ...(marketUrl ? { marketUrl } : {}),
-      ...(resolvedOutcome.outcomeId ? { outcomeId: resolvedOutcome.outcomeId } : {}),
-      ...(resolvedOutcome.outcomeLabel ? { outcomeLabel: resolvedOutcome.outcomeLabel } : {}),
+      ...(resolvedOutcomeId ? { outcomeId: resolvedOutcomeId } : {}),
+      ...(resolvedOutcomeLabel ? { outcomeLabel: resolvedOutcomeLabel } : {}),
     };
     await prisma.bookmark.upsert({
       where: {
@@ -255,8 +214,8 @@ export async function POST(request: NextRequest) {
         ...(title ? { title } : {}),
         ...(category ? { category } : {}),
         ...(marketUrl ? { marketUrl } : {}),
-        ...(resolvedOutcome.outcomeId ? { outcomeId: resolvedOutcome.outcomeId } : {}),
-        ...(resolvedOutcome.outcomeLabel ? { outcomeLabel: resolvedOutcome.outcomeLabel } : {}),
+        ...(resolvedOutcomeId ? { outcomeId: resolvedOutcomeId } : {}),
+        ...(resolvedOutcomeLabel ? { outcomeLabel: resolvedOutcomeLabel } : {}),
       },
       update: updateData,
     });

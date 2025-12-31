@@ -7,7 +7,12 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 import { getMarketDetails } from '@/lib/polymarket/api';
-import { inferBookmarkOutcome, resolveFinalPrice } from '@/lib/polymarket/settlement';
+import {
+  findOutcomeIndex,
+  inferOutcomeFromEntryPrice,
+  resolveFinalPrice,
+  resolveOutcomePrice,
+} from '@/lib/polymarket/settlement';
 
 const TIMEFRAMES: Record<string, number> = {
   '1d': 1,
@@ -22,6 +27,27 @@ const resolveStartDate = (value: string | null) => {
   if (!days) return null;
   const now = Date.now();
   return new Date(now - days * 24 * 60 * 60 * 1000);
+};
+
+const resolveYesNoOutcome = ({
+  entryPrice,
+  outcomeLabels,
+  outcomeTokenIds,
+}: {
+  entryPrice: number;
+  outcomeLabels: string[] | null;
+  outcomeTokenIds: string[] | null;
+}) => {
+  if (!outcomeLabels?.length) return null;
+  const yesIdx = findOutcomeIndex(outcomeLabels, 'Yes');
+  const noIdx = findOutcomeIndex(outcomeLabels, 'No');
+  if (yesIdx == null || noIdx == null) return null;
+  const useYes = entryPrice >= 0.5;
+  const idx = useYes ? yesIdx : noIdx;
+  return {
+    outcomeId: outcomeTokenIds?.[idx] ?? null,
+    outcomeLabel: outcomeLabels[idx] ?? null,
+  };
 };
 
 export async function GET(request: NextRequest) {
@@ -91,25 +117,33 @@ export async function GET(request: NextRequest) {
       const isClosed =
         marketIsClosed || Boolean(market?.closed) || Boolean(bookmark.closedAt) || bookmark.finalPrice != null;
 
-      const currentPrice =
-        market?.price.price ?? bookmark.lastKnownPrice ?? null;
-      const shouldRefreshLastPrice =
-        currentPrice != null &&
-        (bookmark.lastKnownPrice == null || bookmark.lastKnownPrice !== currentPrice);
-
-      const outcomeFallback = market?.price.leadingOutcome ?? null;
       const inferredOutcome =
         bookmark.outcomeId || bookmark.outcomeLabel
           ? null
-          : inferBookmarkOutcome({
+          : inferOutcomeFromEntryPrice({
               entryPrice: bookmark.entryPrice,
               outcomeLabels: market?.outcomes ?? null,
               outcomePrices: market?.outcomePrices ?? null,
               outcomeTokenIds: market?.outcomeTokenIds ?? null,
-              fallbackLabel: outcomeFallback,
+            }) ??
+            resolveYesNoOutcome({
+              entryPrice: bookmark.entryPrice,
+              outcomeLabels: market?.outcomes ?? null,
+              outcomeTokenIds: market?.outcomeTokenIds ?? null,
             });
       const outcomeId = bookmark.outcomeId ?? inferredOutcome?.outcomeId ?? null;
       const outcomeLabel = bookmark.outcomeLabel ?? inferredOutcome?.outcomeLabel ?? null;
+      const currentPrice =
+        resolveOutcomePrice({
+          outcomeId,
+          outcomeLabel,
+          outcomeLabels: market?.outcomes ?? null,
+          outcomeTokenIds: market?.outcomeTokenIds ?? null,
+          outcomePrices: market?.outcomePrices ?? null,
+        }) ?? bookmark.lastKnownPrice ?? null;
+      const shouldRefreshLastPrice =
+        currentPrice != null &&
+        (bookmark.lastKnownPrice == null || bookmark.lastKnownPrice !== currentPrice);
 
       const winningOutcomeId = market?.winningOutcomeId ?? null;
       const winningOutcomeLabel = market?.winningOutcome ?? null;
@@ -127,6 +161,13 @@ export async function GET(request: NextRequest) {
       let closedAt = bookmark.closedAt ?? null;
       if (isResolved && (bookmark.finalPrice == null || bookmark.finalPrice !== finalPrice)) {
         closedAt = closedAt ?? marketClosedAt ?? now;
+        console.log('[history] settlement persisted', {
+          bookmarkId: bookmark.id,
+          marketId: bookmark.marketId,
+          outcomeId,
+          outcomeLabel,
+          finalPrice,
+        });
         updates.push(
           prisma.bookmark.update({
             where: { id: bookmark.id },
@@ -141,6 +182,13 @@ export async function GET(request: NextRequest) {
           }),
         );
       } else if (!isResolved && bookmark.finalPrice != null) {
+        console.log('[history] cleared legacy finalPrice', {
+          bookmarkId: bookmark.id,
+          marketId: bookmark.marketId,
+          finalPrice: bookmark.finalPrice,
+          isClosed,
+          isResolved,
+        });
         updates.push(
           prisma.bookmark.update({
             where: { id: bookmark.id },
@@ -156,7 +204,7 @@ export async function GET(request: NextRequest) {
             data: {
               lastKnownPrice: currentPrice,
               lastPriceAt: now,
-              ...(inferredOutcome?.source === 'matched' || inferredOutcome?.source === 'fallback'
+              ...(inferredOutcome
                 ? {
                     ...(outcomeId ? { outcomeId } : {}),
                     ...(outcomeLabel ? { outcomeLabel } : {}),
