@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/lib/useSession';
@@ -295,6 +296,7 @@ function AnalyticsModal({
   alertsQuery: ReturnType<typeof useAlerts>;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
   const [details, setDetails] = useState<{
     closesAt: string;
     price: number;
@@ -309,6 +311,13 @@ function AnalyticsModal({
   } | null>(null);
   const bookmarkedDate = new Date(bookmarkedAt);
   const initial = Number.isFinite(entryPrice) ? entryPrice : null;
+  const [savedOutcomeId, setSavedOutcomeId] = useState<string | null>(outcomeId ?? null);
+  const [savedOutcomeLabel, setSavedOutcomeLabel] = useState<string | null>(
+    outcomeLabel ?? null,
+  );
+  const [entryOverride, setEntryOverride] = useState<number | null>(null);
+  const [outcomeMessage, setOutcomeMessage] = useState<string | null>(null);
+  const [isSavingOutcome, setIsSavingOutcome] = useState(false);
 
   useEffect(() => {
     if (market) return;
@@ -339,8 +348,17 @@ function AnalyticsModal({
     };
   }, [market, marketId]);
 
+  useEffect(() => {
+    setSavedOutcomeId(outcomeId ?? null);
+    setSavedOutcomeLabel(outcomeLabel ?? null);
+    setEntryOverride(null);
+    setOutcomeMessage(null);
+  }, [marketId, outcomeId, outcomeLabel]);
+
   const currentPrice = market?.price.price ?? details?.price ?? null;
-  const delta = initial != null && currentPrice != null ? currentPrice - initial : null;
+  const effectiveEntry = entryOverride ?? initial;
+  const delta =
+    effectiveEntry != null && currentPrice != null ? currentPrice - effectiveEntry : null;
   const changeCents = delta != null ? delta * 100 : null;
   const changeClass =
     delta == null
@@ -360,18 +378,25 @@ function AnalyticsModal({
   const outcomeLabels = market?.outcomes ?? details?.outcomes ?? null;
   const outcomePrices = market?.outcomePrices ?? details?.outcomePrices ?? null;
   const outcomeTokenIds = market?.outcomeTokenIds ?? details?.outcomeTokenIds ?? null;
+  const outcomeOptions = useMemo(() => {
+    if (!outcomeLabels?.length) return [];
+    return outcomeLabels.map((label, idx) => ({
+      label,
+      id: outcomeTokenIds?.[idx] ?? null,
+    }));
+  }, [outcomeLabels, outcomeTokenIds]);
   const inferredOutcome =
-    outcomeId || outcomeLabel
+    savedOutcomeId || savedOutcomeLabel
       ? null
       : inferBookmarkOutcome({
-          entryPrice: initial,
+          entryPrice: effectiveEntry,
           outcomeLabels,
           outcomePrices,
           outcomeTokenIds,
           fallbackLabel: market?.price.leadingOutcome ?? null,
         });
-  const effectiveOutcomeId = outcomeId ?? inferredOutcome?.outcomeId ?? null;
-  const effectiveOutcomeLabel = outcomeLabel ?? inferredOutcome?.outcomeLabel ?? null;
+  const effectiveOutcomeId = savedOutcomeId ?? inferredOutcome?.outcomeId ?? null;
+  const effectiveOutcomeLabel = savedOutcomeLabel ?? inferredOutcome?.outcomeLabel ?? null;
   const winningOutcomeId = market?.winningOutcomeId ?? details?.winningOutcomeId ?? null;
   const winningOutcomeLabel = market?.winningOutcome ?? details?.winningOutcome ?? null;
   const settlementPrice = resolveFinalPrice({
@@ -386,7 +411,7 @@ function AnalyticsModal({
   const isResolved = settlementPrice != null && resolvedFlag;
   const pendingResolution = isClosed && !isResolved;
   const finalPrice = isResolved ? settlementPrice : null;
-  const entryCents = initial != null ? initial * 100 : null;
+  const entryCents = effectiveEntry != null ? effectiveEntry * 100 : null;
   const exitCents = finalPrice != null ? finalPrice * 100 : null;
   const plDeltaCents =
     entryCents != null && exitCents != null ? exitCents - entryCents : null;
@@ -418,6 +443,8 @@ function AnalyticsModal({
       : `${plDeltaCents > 0 ? '+' : ''}${plDeltaCents.toFixed(1)}c`;
   const plPctLabel =
     plPct == null ? null : `${plPct > 0 ? '+' : ''}${plPct.toFixed(1)}%`;
+  const needsOutcomeSelection =
+    !savedOutcomeId && !savedOutcomeLabel && outcomeOptions.length > 0;
   const modalTitle = market?.title ?? details?.title ?? 'Market analytics';
   const modalCategory = market?.category ?? details?.category ?? '';
   const [activeTab, setActiveTab] = useState<'analytics' | 'alerts'>(
@@ -509,6 +536,42 @@ function AnalyticsModal({
     }
   };
 
+  const handleOutcomeSelect = async (option: { id: string | null; label: string }) => {
+    setOutcomeMessage(null);
+    setIsSavingOutcome(true);
+    try {
+      const res = await fetch(`/api/bookmarks/${marketId}/outcome`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          outcomeId: option.id,
+          outcomeLabel: option.label,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? 'Unable to update outcome.');
+      }
+      const data = (await res.json()) as {
+        outcomeId?: string | null;
+        outcomeLabel?: string | null;
+        entryPrice?: number | null;
+      };
+      setSavedOutcomeId(data.outcomeId ?? option.id ?? null);
+      setSavedOutcomeLabel(data.outcomeLabel ?? option.label ?? null);
+      if (typeof data.entryPrice === 'number' && Number.isFinite(data.entryPrice)) {
+        setEntryOverride(data.entryPrice);
+      }
+      setOutcomeMessage('Outcome saved.');
+      queryClient.invalidateQueries({ queryKey: ['bookmarks'] });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to update outcome.';
+      setOutcomeMessage(message);
+    } finally {
+      setIsSavingOutcome(false);
+    }
+  };
+
   const handleDeleteAlerts = async () => {
     setMessage(null);
     try {
@@ -580,7 +643,7 @@ function AnalyticsModal({
               <div>
                 <p className="text-slate-400">Price at bookmark</p>
                 <p className="font-semibold">
-                  {initial != null ? `${(initial * 100).toFixed(1)}c` : 'N/A'}
+                  {effectiveEntry != null ? `${(effectiveEntry * 100).toFixed(1)}c` : 'N/A'}
                 </p>
               </div>
               <div>
@@ -603,6 +666,32 @@ function AnalyticsModal({
                   <p className="text-xs text-amber-300">Pending resolution</p>
                 )}
               </div>
+              {needsOutcomeSelection && (
+                <div className="rounded-xl border border-slate-700/70 bg-slate-900/40 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                    Select outcome
+                  </p>
+                  <p className="mt-1 text-xs text-slate-300">
+                    Choose the side you bookmarked to enable settlement.
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {outcomeOptions.map((option) => (
+                      <button
+                        key={`${option.label}-${option.id ?? 'label'}`}
+                        type="button"
+                        onClick={() => handleOutcomeSelect(option)}
+                        disabled={isSavingOutcome}
+                        className="rounded-full border border-slate-700 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                  {outcomeMessage && (
+                    <p className="mt-2 text-xs text-slate-300">{outcomeMessage}</p>
+                  )}
+                </div>
+              )}
               {isResolved && (
                 <div>
                   <p className="text-slate-400">Final price</p>

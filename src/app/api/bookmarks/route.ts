@@ -15,6 +15,77 @@ type BookmarkPayload = {
   outcomeLabel?: string | null;
 };
 
+const normalizeLabel = (value: string | null | undefined) =>
+  value ? value.trim().toLowerCase() : null;
+
+const resolveSelectedOutcome = ({
+  outcomeId,
+  outcomeLabel,
+  market,
+}: {
+  outcomeId: string | null;
+  outcomeLabel: string | null;
+  market: Awaited<ReturnType<typeof getMarketDetails>> | null;
+}) => {
+  const labels = market?.outcomes ?? [];
+  const tokenIds = market?.outcomeTokenIds ?? [];
+  let resolvedOutcomeId = outcomeId;
+  let resolvedOutcomeLabel = outcomeLabel;
+
+  if (!resolvedOutcomeLabel && resolvedOutcomeId && tokenIds.length && labels.length) {
+    const idx = tokenIds.findIndex((id) => id === resolvedOutcomeId);
+    resolvedOutcomeLabel = idx >= 0 ? labels[idx] ?? null : null;
+  }
+
+  if (!resolvedOutcomeId && resolvedOutcomeLabel && tokenIds.length && labels.length) {
+    const normalized = normalizeLabel(resolvedOutcomeLabel);
+    const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
+    resolvedOutcomeId = idx >= 0 ? tokenIds[idx] ?? null : null;
+  }
+
+  if (!resolvedOutcomeLabel && market?.price.leadingOutcome) {
+    resolvedOutcomeLabel = market.price.leadingOutcome;
+  }
+
+  if (!resolvedOutcomeId && resolvedOutcomeLabel && tokenIds.length && labels.length) {
+    const normalized = normalizeLabel(resolvedOutcomeLabel);
+    const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
+    resolvedOutcomeId = idx >= 0 ? tokenIds[idx] ?? null : null;
+  }
+
+  return { outcomeId: resolvedOutcomeId, outcomeLabel: resolvedOutcomeLabel };
+};
+
+const resolveOutcomeEntryPrice = ({
+  entryPrice,
+  outcomeId,
+  outcomeLabel,
+  market,
+}: {
+  entryPrice: number;
+  outcomeId: string | null;
+  outcomeLabel: string | null;
+  market: Awaited<ReturnType<typeof getMarketDetails>> | null;
+}) => {
+  const labels = market?.outcomes ?? [];
+  const prices = market?.outcomePrices ?? [];
+  const tokenIds = market?.outcomeTokenIds ?? [];
+  if (labels.length && prices.length) {
+    if (outcomeId && tokenIds.length) {
+      const idx = tokenIds.findIndex((id) => id === outcomeId);
+      const price = idx >= 0 ? prices[idx] : null;
+      if (typeof price === 'number' && Number.isFinite(price)) return price;
+    }
+    if (outcomeLabel) {
+      const normalized = normalizeLabel(outcomeLabel);
+      const idx = labels.findIndex((label) => normalizeLabel(label) === normalized);
+      const price = idx >= 0 ? prices[idx] : null;
+      if (typeof price === 'number' && Number.isFinite(price)) return price;
+    }
+  }
+  return entryPrice;
+};
+
 export async function GET(request: NextRequest) {
   try {
     if (!prisma) {
@@ -133,8 +204,8 @@ export async function POST(request: NextRequest) {
     const title = body.title?.trim() || null;
     const category = body.category?.trim() || null;
     const marketUrl = body.marketUrl?.trim() || null;
-    const outcomeId = body.outcomeId?.trim() || null;
-    const outcomeLabel = body.outcomeLabel?.trim() || null;
+    const rawOutcomeId = body.outcomeId?.trim() || null;
+    const rawOutcomeLabel = body.outcomeLabel?.trim() || null;
     if (!marketId) {
       return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
     }
@@ -142,15 +213,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'entryPrice is required' }, { status: 400 });
     }
 
-    const updateData = {
+    let market = null;
+    try {
+      market = await getMarketDetails(marketId);
+    } catch {
+      market = null;
+    }
+    const resolvedOutcome = resolveSelectedOutcome({
+      outcomeId: rawOutcomeId,
+      outcomeLabel: rawOutcomeLabel,
+      market,
+    });
+    const resolvedEntryPrice = resolveOutcomeEntryPrice({
       entryPrice,
+      outcomeId: resolvedOutcome.outcomeId,
+      outcomeLabel: resolvedOutcome.outcomeLabel,
+      market,
+    });
+
+    const updateData = {
+      entryPrice: resolvedEntryPrice,
       createdAt: new Date(),
       removedAt: null,
       ...(title ? { title } : {}),
       ...(category ? { category } : {}),
       ...(marketUrl ? { marketUrl } : {}),
-      ...(outcomeId ? { outcomeId } : {}),
-      ...(outcomeLabel ? { outcomeLabel } : {}),
+      ...(resolvedOutcome.outcomeId ? { outcomeId: resolvedOutcome.outcomeId } : {}),
+      ...(resolvedOutcome.outcomeLabel ? { outcomeLabel: resolvedOutcome.outcomeLabel } : {}),
     };
     await prisma.bookmark.upsert({
       where: {
@@ -162,12 +251,12 @@ export async function POST(request: NextRequest) {
       create: {
         userId: user.id,
         marketId,
-        entryPrice,
+        entryPrice: resolvedEntryPrice,
         ...(title ? { title } : {}),
         ...(category ? { category } : {}),
         ...(marketUrl ? { marketUrl } : {}),
-        ...(outcomeId ? { outcomeId } : {}),
-        ...(outcomeLabel ? { outcomeLabel } : {}),
+        ...(resolvedOutcome.outcomeId ? { outcomeId: resolvedOutcome.outcomeId } : {}),
+        ...(resolvedOutcome.outcomeLabel ? { outcomeLabel: resolvedOutcome.outcomeLabel } : {}),
       },
       update: updateData,
     });
