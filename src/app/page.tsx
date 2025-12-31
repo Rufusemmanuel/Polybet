@@ -269,6 +269,8 @@ function MarketsSection({
     title: string;
     category: string;
     marketUrl: string;
+    outcomeId?: string | null;
+    outcomeLabel?: string | null;
   } | null>(null);
 
   const bookmarkedIds = useMemo(
@@ -284,6 +286,8 @@ function MarketsSection({
       title,
       category,
       marketUrl,
+      outcomeId,
+      outcomeLabel,
     }: {
       marketId: string;
       isBookmarked: boolean;
@@ -291,6 +295,8 @@ function MarketsSection({
       title: string;
       category: string;
       marketUrl: string;
+      outcomeId?: string | null;
+      outcomeLabel?: string | null;
     }) => {
       const res = await fetch(
         isBookmarked ? `/api/bookmarks/${marketId}` : '/api/bookmarks',
@@ -299,13 +305,30 @@ function MarketsSection({
           headers: isBookmarked ? undefined : { 'Content-Type': 'application/json' },
           body: isBookmarked
             ? undefined
-            : JSON.stringify({ marketId, entryPrice, title, category, marketUrl }),
+            : JSON.stringify({
+                marketId,
+                entryPrice,
+                title,
+                category,
+                marketUrl,
+                outcomeId,
+                outcomeLabel,
+              }),
         },
       );
       if (!res.ok) throw new Error('Unable to update bookmark');
       return res.json();
     },
-    onMutate: async ({ marketId, isBookmarked, entryPrice, title, category, marketUrl }) => {
+    onMutate: async ({
+      marketId,
+      isBookmarked,
+      entryPrice,
+      title,
+      category,
+      marketUrl,
+      outcomeId,
+      outcomeLabel,
+    }) => {
       await queryClient.cancelQueries({ queryKey: ['bookmarks'] });
       const previous = queryClient.getQueryData<{
         bookmarks: {
@@ -315,6 +338,8 @@ function MarketsSection({
           title: string | null;
           category: string | null;
           marketUrl: string | null;
+          outcomeId?: string | null;
+          outcomeLabel?: string | null;
         }[];
       }>(['bookmarks']);
       const prevBookmarks = previous?.bookmarks ?? [];
@@ -329,6 +354,8 @@ function MarketsSection({
               title,
               category,
               marketUrl,
+              outcomeId,
+              outcomeLabel,
             },
           ];
       queryClient.setQueryData(['bookmarks'], { bookmarks: nextBookmarks });
@@ -350,6 +377,8 @@ function MarketsSection({
     title: string;
     category: string;
     marketUrl: string;
+    outcomeId?: string | null;
+    outcomeLabel?: string | null;
   }) => {
     if (!user) {
       setPendingBookmark(data);
@@ -373,6 +402,8 @@ function MarketsSection({
         title: pendingBookmark.title,
         category: pendingBookmark.category,
         marketUrl: pendingBookmark.marketUrl,
+        outcomeId: pendingBookmark.outcomeId ?? null,
+        outcomeLabel: pendingBookmark.outcomeLabel ?? null,
       });
       setPendingBookmark(null);
     }

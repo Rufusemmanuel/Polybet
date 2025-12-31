@@ -34,8 +34,11 @@ const COL_WIDTHS = {
   status: '8%',
 } as const;
 
-const formatStatus = (status: HistoryExportRow['status']) =>
-  status === 'Removed' ? 'Re\u2060moved' : status;
+const formatStatus = (status: HistoryExportRow['status']) => {
+  if (status === 'Removed') return 'Re\u2060moved';
+  if (status === 'Pending resolution') return 'Pending';
+  return status;
+};
 
 const styles = StyleSheet.create({
   page: {
@@ -204,6 +207,7 @@ const statusColors: Record<HistoryExportRow['status'], { bg: string; text: strin
   Closed: { bg: '#effaf3', text: '#166534' },
   Removed: { bg: '#fef2f2', text: '#991b1b' },
   Active: { bg: '#eff6ff', text: '#1e40af' },
+  'Pending resolution': { bg: '#fff7ed', text: '#b45309' },
 };
 
 export function HistoryPdf({

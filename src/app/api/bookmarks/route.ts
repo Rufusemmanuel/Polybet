@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
+import { getMarketDetails } from '@/lib/polymarket/api';
+import { inferBookmarkOutcome } from '@/lib/polymarket/settlement';
 
 type BookmarkPayload = {
   marketId?: string;
@@ -8,6 +10,8 @@ type BookmarkPayload = {
   title?: string;
   category?: string;
   marketUrl?: string;
+  outcomeId?: string | null;
+  outcomeLabel?: string | null;
 };
 
 export async function GET(request: NextRequest) {
@@ -30,20 +34,78 @@ export async function GET(request: NextRequest) {
         title: true,
         category: true,
         marketUrl: true,
+        outcomeId: true,
+        outcomeLabel: true,
       },
       orderBy: { createdAt: 'desc' },
     });
 
-    return NextResponse.json({
-      bookmarks: bookmarks.map((b) => ({
-        marketId: b.marketId,
-        createdAt: b.createdAt.toISOString(),
-        entryPrice: b.entryPrice,
-        title: b.title,
-        category: b.category,
-        marketUrl: b.marketUrl,
-      })),
+    const missingOutcome = bookmarks.filter(
+      (bookmark) => !bookmark.outcomeId && !bookmark.outcomeLabel,
+    );
+    const marketMap = new Map<string, Awaited<ReturnType<typeof getMarketDetails>>>();
+
+    if (missingOutcome.length) {
+      await Promise.all(
+        missingOutcome.map(async (bookmark) => {
+          if (marketMap.has(bookmark.marketId)) return;
+          try {
+            const market = await getMarketDetails(bookmark.marketId);
+            marketMap.set(bookmark.marketId, market);
+          } catch {
+            marketMap.set(bookmark.marketId, null);
+          }
+        }),
+      );
+    }
+
+    const updates = [];
+    const response = NextResponse.json({
+      bookmarks: bookmarks.map((b) => {
+        const market = marketMap.get(b.marketId) ?? null;
+        const inferred =
+          b.outcomeId || b.outcomeLabel
+            ? null
+            : inferBookmarkOutcome({
+                entryPrice: b.entryPrice,
+                outcomeLabels: market?.outcomes ?? null,
+                outcomePrices: market?.outcomePrices ?? null,
+                outcomeTokenIds: market?.outcomeTokenIds ?? null,
+                fallbackLabel: market?.price.leadingOutcome ?? null,
+              });
+        const outcomeId = b.outcomeId ?? inferred?.outcomeId ?? null;
+        const outcomeLabel = b.outcomeLabel ?? inferred?.outcomeLabel ?? null;
+        if (!b.outcomeId && !b.outcomeLabel && (outcomeId || outcomeLabel)) {
+          updates.push(
+            prisma.bookmark.update({
+              where: { userId_marketId: { userId: user.id, marketId: b.marketId } },
+              data: {
+                ...(outcomeId ? { outcomeId } : {}),
+                ...(outcomeLabel ? { outcomeLabel } : {}),
+              },
+            }),
+          );
+        }
+        return {
+          marketId: b.marketId,
+          createdAt: b.createdAt.toISOString(),
+          entryPrice: b.entryPrice,
+          title: b.title,
+          category: b.category,
+          marketUrl: b.marketUrl,
+          outcomeId,
+          outcomeLabel,
+        };
+      }),
     });
+    if (updates.length) {
+      try {
+        await prisma.$transaction(updates);
+      } catch (error) {
+        console.error('[bookmarks] outcome backfill error', error);
+      }
+    }
+    return response;
   } catch (error) {
     console.error('[bookmarks] GET error', error);
     return NextResponse.json({ error: 'Unable to load bookmarks' }, { status: 500 });
@@ -70,6 +132,8 @@ export async function POST(request: NextRequest) {
     const title = body.title?.trim() || null;
     const category = body.category?.trim() || null;
     const marketUrl = body.marketUrl?.trim() || null;
+    const outcomeId = body.outcomeId?.trim() || null;
+    const outcomeLabel = body.outcomeLabel?.trim() || null;
     if (!marketId) {
       return NextResponse.json({ error: 'marketId is required' }, { status: 400 });
     }
@@ -84,6 +148,8 @@ export async function POST(request: NextRequest) {
       ...(title ? { title } : {}),
       ...(category ? { category } : {}),
       ...(marketUrl ? { marketUrl } : {}),
+      ...(outcomeId ? { outcomeId } : {}),
+      ...(outcomeLabel ? { outcomeLabel } : {}),
     };
     await prisma.bookmark.upsert({
       where: {
@@ -99,6 +165,8 @@ export async function POST(request: NextRequest) {
         ...(title ? { title } : {}),
         ...(category ? { category } : {}),
         ...(marketUrl ? { marketUrl } : {}),
+        ...(outcomeId ? { outcomeId } : {}),
+        ...(outcomeLabel ? { outcomeLabel } : {}),
       },
       update: updateData,
     });

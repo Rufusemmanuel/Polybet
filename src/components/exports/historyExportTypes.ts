@@ -1,4 +1,4 @@
-export type HistoryStatus = 'Closed' | 'Removed' | 'Active';
+export type HistoryStatus = 'Closed' | 'Removed' | 'Active' | 'Pending resolution';
 
 export type HistoryExportRow = {
   id: string;

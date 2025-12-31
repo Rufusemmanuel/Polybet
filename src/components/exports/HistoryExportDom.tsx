@@ -29,6 +29,7 @@ const statusStyles: Record<HistoryExportRow['status'], { bg: string; text: strin
   Closed: { bg: '#effaf3', text: '#166534' },
   Removed: { bg: '#fef2f2', text: '#991b1b' },
   Active: { bg: '#eff6ff', text: '#1e40af' },
+  'Pending resolution': { bg: '#fff7ed', text: '#b45309' },
 };
 
 export const HistoryExportDom = forwardRef<HTMLDivElement, Props>(

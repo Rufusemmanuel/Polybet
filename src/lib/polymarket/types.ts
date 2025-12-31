@@ -19,6 +19,13 @@ export type MarketSummary = {
   yesTokenId?: string | null;
   noTokenId?: string | null;
   closedTime?: Date;
+  closed?: boolean;
+  outcomes?: string[] | null;
+  outcomePrices?: number[] | null;
+  outcomeTokenIds?: string[] | null;
+  resolved?: boolean;
+  winningOutcome?: string | null;
+  winningOutcomeId?: string | null;
   price: MarketPrice;
   volume: number;
   url: string;
@@ -41,6 +48,13 @@ export type RawMarket = {
   resolutionRules?: string;
   resolutionCriteria?: string;
   marketRules?: string;
+  resolution?: string | null;
+  resolved?: boolean;
+  winningOutcome?: string | null;
+  winningOutcomeId?: string | null;
+  outcome?: string | null;
+  closed?: boolean;
+  clobTokenIds?: string;
   slug: string;
   category?: string;
 
@@ -120,6 +134,8 @@ export type BookmarkHistoryDto = {
   title?: string | null;
   category?: string | null;
   marketUrl?: string | null;
+  outcomeId?: string | null;
+  outcomeLabel?: string | null;
   entryPrice: number;
   createdAt: string;
   removedAt?: string | null;
@@ -129,6 +145,7 @@ export type BookmarkHistoryDto = {
   closedAt?: string | null;
   currentPrice?: number | null;
   isClosed: boolean;
+  isResolved?: boolean;
 };
 
 export type MarketDetailsResponse = {
@@ -140,6 +157,13 @@ export type MarketDetailsResponse = {
   tags?: string[];
   volume: number;
   closesAt: string;
+  closedTime?: string | null;
+  outcomes?: string[] | null;
+  outcomePrices?: number[] | null;
+  outcomeTokenIds?: string[] | null;
+  resolved?: boolean;
+  winningOutcome?: string | null;
+  winningOutcomeId?: string | null;
   leading: { outcome: string; price: number; prob: number };
   about: { description?: string | null; resolution?: string | null };
   highConfidence: { min: number; max: number; currentProb: number; whyText: string };

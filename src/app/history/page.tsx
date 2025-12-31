@@ -17,6 +17,8 @@ type HistoryBookmark = {
   title?: string | null;
   category?: string | null;
   marketUrl?: string | null;
+  outcomeId?: string | null;
+  outcomeLabel?: string | null;
   entryPrice: number;
   createdAt: string;
   removedAt?: string | null;
@@ -26,6 +28,7 @@ type HistoryBookmark = {
   closedAt?: string | null;
   currentPrice?: number | null;
   isClosed: boolean;
+  isResolved?: boolean;
 };
 
 type HistoryResponse = {
@@ -100,6 +103,7 @@ const toHistoryStatus = (
   isClosed?: boolean,
 ): HistoryStatus => {
   const v = (s ?? '').trim().toLowerCase();
+  if (v === 'pending') return 'Pending resolution';
   if (v === 'closed') return 'Closed';
   if (v === 'removed') return 'Removed';
   if (v === 'active') return 'Active';
@@ -128,7 +132,9 @@ function TradeHistoryMobileCard({ row }: { row: HistoryRow }) {
       ? 'border-red-500/40 text-red-200'
       : row.status === 'Closed'
         ? 'border-emerald-500/40 text-emerald-200'
-        : 'border-blue-500/40 text-blue-200';
+        : row.status === 'Pending resolution'
+          ? 'border-amber-400/40 text-amber-200'
+          : 'border-blue-500/40 text-blue-200';
 
   return (
     <div className="rounded-2xl border border-slate-800 bg-[#0f182c] p-4">
@@ -222,7 +228,7 @@ export default function HistoryPage() {
     const bookmarks = historyQuery.data?.bookmarks ?? [];
     return bookmarks.map((bookmark) => {
       const latestPrice =
-        bookmark.isClosed && bookmark.finalPrice != null
+        bookmark.isResolved && bookmark.finalPrice != null
           ? bookmark.finalPrice
           : bookmark.currentPrice ?? bookmark.lastKnownPrice ?? null;
       const profitDelta =
@@ -232,7 +238,13 @@ export default function HistoryPage() {
           ? (profitDelta / bookmark.entryPrice) * 100
           : null;
       const status = toHistoryStatus(
-        bookmark.removedAt ? 'Removed' : bookmark.isClosed ? 'Closed' : 'Active',
+        bookmark.removedAt
+          ? 'Removed'
+          : bookmark.isClosed
+            ? bookmark.isResolved
+              ? 'Closed'
+              : 'Pending'
+            : 'Active',
         bookmark.isClosed,
       );
       return {
@@ -556,7 +568,9 @@ export default function HistoryPage() {
                             ? 'border-red-500/40 text-red-200'
                             : row.status === 'Closed'
                               ? 'border-emerald-500/40 text-emerald-200'
-                              : 'border-blue-500/40 text-blue-200';
+                              : row.status === 'Pending resolution'
+                                ? 'border-amber-400/40 text-amber-200'
+                                : 'border-blue-500/40 text-blue-200';
                         return (
                           <tr key={row.id} className="hover:bg-[#111b33]">
                             <td className="px-3 py-3">

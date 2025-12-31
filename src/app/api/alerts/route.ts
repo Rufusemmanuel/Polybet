@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
     if (market) {
       const now = Date.now();
       const isClosed =
-        market.endDate.getTime() <= now || Boolean(market.closedTime);
+        market.endDate.getTime() <= now || Boolean(market.closedTime) || Boolean(market.closed);
       if (isClosed) {
         return NextResponse.json(
           { error: 'Alerts are disabled for closed markets.' },

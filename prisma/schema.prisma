@@ -70,6 +70,8 @@ model Bookmark {
   title     String?
   category  String?
   marketUrl String?
+  outcomeId String?
+  outcomeLabel String?
   entryPrice Float
   createdAt DateTime @default(now())
   removedAt DateTime?

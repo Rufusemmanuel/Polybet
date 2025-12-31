@@ -18,6 +18,8 @@ type Props = {
     title: string;
     category: string;
     marketUrl: string;
+    outcomeId?: string | null;
+    outcomeLabel?: string | null;
   }) => void;
 };
 
@@ -96,6 +98,17 @@ export function MarketCard({
                   title: market.title,
                   category: market.category ?? 'Unknown',
                   marketUrl: market.url,
+                  outcomeLabel: market.price.leadingOutcome,
+                  outcomeId: (() => {
+                    const outcomes = market.outcomes ?? [];
+                    const tokenIds = market.outcomeTokenIds ?? [];
+                    const idx = outcomes.findIndex(
+                      (label) =>
+                        label.trim().toLowerCase() ===
+                        market.price.leadingOutcome.trim().toLowerCase(),
+                    );
+                    return idx >= 0 ? tokenIds[idx] ?? null : null;
+                  })(),
                 })
               }
               className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition ${

@@ -4,7 +4,14 @@ import { POLYMARKET_CONFIG } from '../config';
 import { getTopOfBook } from './clob';
 import { resolveCategory } from './category';
 import { getPolymarketMarketUrl } from './url';
-import type { MarketDetailsResponse, MarketPrice, MarketSummary, OutcomeSide, RawEvent, RawMarket } from './types';
+import type {
+  MarketDetailsResponse,
+  MarketPrice,
+  MarketSummary,
+  OutcomeSide,
+  RawEvent,
+  RawMarket,
+} from './types';
 
 const fetchJson = async <T>(url: string): Promise<T> => {
   const res = await fetch(url, { next: { revalidate: 0 } });
@@ -14,33 +21,132 @@ const fetchJson = async <T>(url: string): Promise<T> => {
   return (await res.json()) as T;
 };
 
-const parseOutcomePrices = (outcomes?: string, outcomePrices?: string): MarketPrice | null => {
-  if (!outcomes || !outcomePrices) return null;
+type ParsedOutcomes = {
+  labels: string[];
+  prices: number[];
+  tokenIds: string[];
+};
 
-  let labels: string[];
-  let prices: string[];
+const parseOutcomeData = (
+  outcomes?: string,
+  outcomePrices?: string,
+  clobTokenIds?: string,
+): ParsedOutcomes => {
+  let labels: string[] = [];
+  let prices: number[] = [];
+  let tokenIds: string[] = [];
 
-  try {
-    labels = JSON.parse(outcomes) as string[];
-    prices = JSON.parse(outcomePrices) as string[];
-  } catch {
-    return null;
+  if (outcomes) {
+    try {
+      labels = JSON.parse(outcomes) as string[];
+    } catch {
+      labels = [];
+    }
   }
 
-  if (!labels.length || !prices.length) return null;
+  if (outcomePrices) {
+    try {
+      const parsed = JSON.parse(outcomePrices) as string[];
+      const numeric = parsed.map((p) => Number(p));
+      prices = numeric.some((n) => Number.isNaN(n)) ? [] : numeric;
+    } catch {
+      prices = [];
+    }
+  }
 
-  const numeric = prices.map((p) => Number(p));
-  if (!numeric.length || numeric.some((n) => Number.isNaN(n))) return null;
+  if (clobTokenIds) {
+    try {
+      tokenIds = JSON.parse(clobTokenIds) as string[];
+    } catch {
+      tokenIds = [];
+    }
+  }
 
-  const maxIdx = numeric.reduce(
-    (max, price, idx) => (price > numeric[max] ? idx : max),
+  return { labels, prices, tokenIds };
+};
+
+const resolveLeadingPrice = (
+  outcomeData: ParsedOutcomes,
+  fallbackBestBid: number | null,
+): MarketPrice | null => {
+  const { labels, prices } = outcomeData;
+  if (labels.length && prices.length) {
+    const maxIdx = prices.reduce(
+      (max, price, idx) => (price > prices[max] ? idx : max),
+      0,
+    );
+    return {
+      leadingOutcome: (labels[maxIdx] ?? 'Yes') as OutcomeSide,
+      price: prices[maxIdx],
+    };
+  }
+  if (fallbackBestBid != null) {
+    return { leadingOutcome: 'Yes' as OutcomeSide, price: fallbackBestBid };
+  }
+  return null;
+};
+
+const normalizeOutcomeLabel = (value: unknown): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : null;
+};
+
+const findOutcomeIndex = (labels: string[], target: string | null) => {
+  if (!target) return null;
+  const normalized = target.trim().toLowerCase();
+  if (!normalized) return null;
+  const idx = labels.findIndex((label) => label.trim().toLowerCase() === normalized);
+  return idx >= 0 ? idx : null;
+};
+
+const inferResolvedOutcomeIndex = (prices: number[]) => {
+  if (!prices.length) return null;
+  const maxIdx = prices.reduce(
+    (max, price, idx) => (price > prices[max] ? idx : max),
     0,
   );
+  const maxPrice = prices[maxIdx] ?? 0;
+  if (maxPrice < 0.99) return null;
+  const othersBelow = prices.every((price, idx) => (idx === maxIdx ? true : price <= 0.01));
+  return othersBelow ? maxIdx : null;
+};
 
-  return {
-    leadingOutcome: (labels[maxIdx] ?? 'Yes') as OutcomeSide,
-    price: numeric[maxIdx],
-  };
+const resolveMarketOutcome = (
+  market: RawMarket,
+  outcomeData: ParsedOutcomes,
+): { resolved: boolean; winningOutcome?: string | null; winningOutcomeId?: string | null } => {
+  const labels = outcomeData.labels ?? [];
+  const tokenIds = outcomeData.tokenIds ?? [];
+
+  let winningOutcomeId = normalizeOutcomeLabel(market.winningOutcomeId);
+  let winningOutcome = normalizeOutcomeLabel(market.winningOutcome);
+  const resolutionLabel =
+    normalizeOutcomeLabel(market.resolution) ?? normalizeOutcomeLabel(market.outcome);
+  if (!winningOutcome && resolutionLabel) {
+    winningOutcome = resolutionLabel;
+  }
+
+  const labelIndex = findOutcomeIndex(labels, winningOutcome);
+  if (!winningOutcomeId && labelIndex != null) {
+    winningOutcomeId = tokenIds[labelIndex] ?? null;
+  }
+
+  if (!winningOutcome && winningOutcomeId) {
+    const idIndex = tokenIds.findIndex((id) => id === winningOutcomeId);
+    winningOutcome = idIndex >= 0 ? labels[idIndex] ?? null : null;
+  }
+
+  if (!winningOutcome && !winningOutcomeId) {
+    const inferredIndex = inferResolvedOutcomeIndex(outcomeData.prices);
+    if (inferredIndex != null) {
+      winningOutcome = labels[inferredIndex] ?? null;
+      winningOutcomeId = tokenIds[inferredIndex] ?? null;
+    }
+  }
+
+  const resolved = Boolean(market.resolved) || Boolean(winningOutcome || winningOutcomeId);
+  return { resolved, winningOutcome, winningOutcomeId };
 };
 
 const normalizeToText = (value: unknown): string | null => {
@@ -107,12 +213,10 @@ export const getActiveMarkets = async (): Promise<MarketSummary[]> => {
           ? Number(m.bestBid)
           : null;
 
-      const parsedPrice =
-        parseOutcomePrices(m.outcomes, m.outcomePrices) ??
-        (fallbackBestBid != null
-          ? { leadingOutcome: 'Yes' as OutcomeSide, price: fallbackBestBid }
-          : null);
+      const outcomeData = parseOutcomeData(m.outcomes, m.outcomePrices, m.clobTokenIds);
+      const parsedPrice = resolveLeadingPrice(outcomeData, fallbackBestBid);
       if (!parsedPrice) return null;
+      const outcomeResolution = resolveMarketOutcome(m, outcomeData);
 
       // Use event slug when available (grouped markets), otherwise fall back to market slug.
       const eventSlug = m.events?.[0]?.slug ?? m.slug;
@@ -132,6 +236,13 @@ export const getActiveMarkets = async (): Promise<MarketSummary[]> => {
         yesTokenId: m.yesTokenId ?? null,
         noTokenId: m.noTokenId ?? null,
         closedTime,
+        closed: Boolean(m.closed),
+        outcomes: outcomeData.labels.length ? outcomeData.labels : null,
+        outcomePrices: outcomeData.prices.length ? outcomeData.prices : null,
+        outcomeTokenIds: outcomeData.tokenIds.length ? outcomeData.tokenIds : null,
+        resolved: outcomeResolution.resolved,
+        winningOutcome: outcomeResolution.winningOutcome ?? null,
+        winningOutcomeId: outcomeResolution.winningOutcomeId ?? null,
         price: parsedPrice,
         volume: Number(m.volume ?? m.volumeNum ?? 0),
         url: marketUrl,
@@ -165,12 +276,17 @@ export const getMarketDetails = async (
   const url = `${POLYMARKET_CONFIG.gammaBaseUrl}/markets/${marketId}`;
   const market = await fetchJson<RawMarket>(url);
 
-  const price =
-    parseOutcomePrices(market.outcomes, market.outcomePrices) ??
-    (market.bestBid
-      ? { leadingOutcome: 'Yes' as OutcomeSide, price: Number(market.bestBid) }
-      : null);
+  const outcomeData = parseOutcomeData(
+    market.outcomes,
+    market.outcomePrices,
+    market.clobTokenIds,
+  );
+  const price = resolveLeadingPrice(
+    outcomeData,
+    market.bestBid ? Number(market.bestBid) : null,
+  );
   if (!price) return null;
+  const outcomeResolution = resolveMarketOutcome(market, outcomeData);
 
   const eventSlug = market.events?.[0]?.slug ?? market.slug;
   const marketUrl = getPolymarketMarketUrl(eventSlug, market.conditionId);
@@ -187,6 +303,13 @@ export const getMarketDetails = async (
     yesTokenId: market.yesTokenId ?? null,
     noTokenId: market.noTokenId ?? null,
     closedTime: market.closedTime ? new Date(market.closedTime) : undefined,
+    closed: Boolean(market.closed),
+    outcomes: outcomeData.labels.length ? outcomeData.labels : null,
+    outcomePrices: outcomeData.prices.length ? outcomeData.prices : null,
+    outcomeTokenIds: outcomeData.tokenIds.length ? outcomeData.tokenIds : null,
+    resolved: outcomeResolution.resolved,
+    winningOutcome: outcomeResolution.winningOutcome ?? null,
+    winningOutcomeId: outcomeResolution.winningOutcomeId ?? null,
     price,
     volume: Number(market.volume ?? market.volumeNum ?? 0),
     url: marketUrl,
@@ -213,12 +336,17 @@ export const getMarketDetailsPayload = async (
 
   if (!market) return null;
 
-  const price =
-    parseOutcomePrices(market.outcomes, market.outcomePrices) ??
-    (market.bestBid
-      ? { leadingOutcome: 'Yes' as OutcomeSide, price: Number(market.bestBid) }
-      : null);
+  const outcomeData = parseOutcomeData(
+    market.outcomes,
+    market.outcomePrices,
+    market.clobTokenIds,
+  );
+  const price = resolveLeadingPrice(
+    outcomeData,
+    market.bestBid ? Number(market.bestBid) : null,
+  );
   if (!price) return null;
+  const outcomeResolution = resolveMarketOutcome(market, outcomeData);
 
   const description =
     normalizeToText(market.description) ??
@@ -243,6 +371,13 @@ export const getMarketDetailsPayload = async (
     tags: tagLabels,
     volume: Number(market.volume ?? market.volumeNum ?? 0),
     closesAt: market.endDate,
+    closedTime: market.closedTime ?? null,
+    outcomes: outcomeData.labels.length ? outcomeData.labels : null,
+    outcomePrices: outcomeData.prices.length ? outcomeData.prices : null,
+    outcomeTokenIds: outcomeData.tokenIds.length ? outcomeData.tokenIds : null,
+    resolved: outcomeResolution.resolved,
+    winningOutcome: outcomeResolution.winningOutcome ?? null,
+    winningOutcomeId: outcomeResolution.winningOutcomeId ?? null,
     leading: {
       outcome: price.leadingOutcome,
       price: price.price,
@@ -270,17 +405,18 @@ export const getResolvedStatus = async (marketId: string): Promise<{
   if (!details) return { resolved: false };
 
   const now = Date.now();
-  const isClosed = details.endDate.getTime() <= now || !!details.closedTime;
+  const isClosed =
+    details.endDate.getTime() <= now || !!details.closedTime || details.closed;
 
   if (!isClosed) return { resolved: false };
 
-  // Very naive “winner” inference; you can improve this later.
-  const inferredWinner =
-    details.price.price >= 0.99 ? details.price.leadingOutcome : details.price.leadingOutcome;
+  if (!details.resolved || !details.winningOutcome) {
+    return { resolved: false };
+  }
 
   return {
     resolved: true,
-    winningOutcome: inferredWinner,
+    winningOutcome: details.winningOutcome as OutcomeSide,
     closedAt: details.closedTime ?? details.endDate,
   };
 };

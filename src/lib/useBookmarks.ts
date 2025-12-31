@@ -9,6 +9,8 @@ type BookmarkRecord = {
   title: string | null;
   category: string | null;
   marketUrl: string | null;
+  outcomeId?: string | null;
+  outcomeLabel?: string | null;
 };
 
 type BookmarksResponse = {

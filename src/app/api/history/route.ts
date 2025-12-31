@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 import { getMarketDetails } from '@/lib/polymarket/api';
+import { inferBookmarkOutcome, resolveFinalPrice } from '@/lib/polymarket/settlement';
 
 const TIMEFRAMES: Record<string, number> = {
   '1d': 1,
@@ -48,6 +49,8 @@ export async function GET(request: NextRequest) {
         title: true,
         category: true,
         marketUrl: true,
+        outcomeId: true,
+        outcomeLabel: true,
         entryPrice: true,
         createdAt: true,
         removedAt: true,
@@ -86,7 +89,7 @@ export async function GET(request: NextRequest) {
         ? marketClosedAt.getTime() <= now.getTime()
         : false;
       const isClosed =
-        marketIsClosed || Boolean(bookmark.closedAt) || bookmark.finalPrice != null;
+        marketIsClosed || Boolean(market?.closed) || Boolean(bookmark.closedAt) || bookmark.finalPrice != null;
 
       const currentPrice =
         market?.price.price ?? bookmark.lastKnownPrice ?? null;
@@ -94,10 +97,35 @@ export async function GET(request: NextRequest) {
         currentPrice != null &&
         (bookmark.lastKnownPrice == null || bookmark.lastKnownPrice !== currentPrice);
 
-      let finalPrice = bookmark.finalPrice ?? null;
+      const outcomeFallback = market?.price.leadingOutcome ?? null;
+      const inferredOutcome =
+        bookmark.outcomeId || bookmark.outcomeLabel
+          ? null
+          : inferBookmarkOutcome({
+              entryPrice: bookmark.entryPrice,
+              outcomeLabels: market?.outcomes ?? null,
+              outcomePrices: market?.outcomePrices ?? null,
+              outcomeTokenIds: market?.outcomeTokenIds ?? null,
+              fallbackLabel: outcomeFallback,
+            });
+      const outcomeId = bookmark.outcomeId ?? inferredOutcome?.outcomeId ?? null;
+      const outcomeLabel = bookmark.outcomeLabel ?? inferredOutcome?.outcomeLabel ?? null;
+
+      const winningOutcomeId = market?.winningOutcomeId ?? null;
+      const winningOutcomeLabel = market?.winningOutcome ?? null;
+      const settlementPrice = resolveFinalPrice({
+        bookmarkOutcomeId: outcomeId,
+        bookmarkOutcomeLabel: outcomeLabel,
+        winningOutcomeId,
+        winningOutcomeLabel,
+        outcomeLabels: market?.outcomes ?? null,
+        outcomeTokenIds: market?.outcomeTokenIds ?? null,
+      });
+      const isResolved = settlementPrice != null && Boolean(market?.resolved);
+
+      let finalPrice = isResolved ? settlementPrice : null;
       let closedAt = bookmark.closedAt ?? null;
-      if (isClosed && finalPrice == null && market?.price.price != null) {
-        finalPrice = market.price.price;
+      if (isResolved && (bookmark.finalPrice == null || bookmark.finalPrice !== finalPrice)) {
         closedAt = closedAt ?? marketClosedAt ?? now;
         updates.push(
           prisma.bookmark.update({
@@ -105,18 +133,45 @@ export async function GET(request: NextRequest) {
             data: {
               finalPrice,
               closedAt,
-              lastKnownPrice: market.price.price,
-              lastPriceAt: now,
+              lastKnownPrice: currentPrice ?? undefined,
+              lastPriceAt: currentPrice != null ? now : undefined,
+              ...(outcomeId ? { outcomeId } : {}),
+              ...(outcomeLabel ? { outcomeLabel } : {}),
             },
           }),
         );
-      } else if (!isClosed && shouldRefreshLastPrice) {
+      } else if (!isResolved && bookmark.finalPrice != null) {
+        updates.push(
+          prisma.bookmark.update({
+            where: { id: bookmark.id },
+            data: {
+              finalPrice: null,
+            },
+          }),
+        );
+      } else if (shouldRefreshLastPrice) {
         updates.push(
           prisma.bookmark.update({
             where: { id: bookmark.id },
             data: {
               lastKnownPrice: currentPrice,
               lastPriceAt: now,
+              ...(inferredOutcome?.source === 'matched' || inferredOutcome?.source === 'fallback'
+                ? {
+                    ...(outcomeId ? { outcomeId } : {}),
+                    ...(outcomeLabel ? { outcomeLabel } : {}),
+                  }
+                : {}),
+            },
+          }),
+        );
+      } else if (inferredOutcome && (outcomeId || outcomeLabel)) {
+        updates.push(
+          prisma.bookmark.update({
+            where: { id: bookmark.id },
+            data: {
+              ...(outcomeId ? { outcomeId } : {}),
+              ...(outcomeLabel ? { outcomeLabel } : {}),
             },
           }),
         );
@@ -128,6 +183,8 @@ export async function GET(request: NextRequest) {
         title: bookmark.title,
         category: bookmark.category,
         marketUrl: bookmark.marketUrl,
+        outcomeId,
+        outcomeLabel,
         entryPrice: bookmark.entryPrice,
         createdAt: bookmark.createdAt.toISOString(),
         removedAt: bookmark.removedAt ? bookmark.removedAt.toISOString() : null,
@@ -137,6 +194,7 @@ export async function GET(request: NextRequest) {
         closedAt: closedAt ? closedAt.toISOString() : null,
         currentPrice,
         isClosed,
+        isResolved,
       };
     });
 

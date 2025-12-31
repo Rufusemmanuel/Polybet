@@ -8,6 +8,7 @@ import { useAlerts } from '@/lib/useAlerts';
 import { useBookmarks } from '@/lib/useBookmarks';
 import { useMarkets } from '@/lib/useMarkets';
 import type { MarketSummary } from '@/lib/polymarket/types';
+import { inferBookmarkOutcome, resolveFinalPrice } from '@/lib/polymarket/settlement';
 
 type MarketWithStrings = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
   endDate: string;
@@ -27,6 +28,8 @@ export default function TradeClient() {
     marketId: string;
     bookmarkedAt: string;
     entryPrice: number;
+    outcomeId?: string | null;
+    outcomeLabel?: string | null;
     initialTab?: 'analytics' | 'alerts';
   } | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
@@ -115,6 +118,8 @@ export default function TradeClient() {
       marketId,
       bookmarkedAt: bookmark.createdAt,
       entryPrice: bookmark.entryPrice,
+      outcomeId: bookmark.outcomeId ?? null,
+      outcomeLabel: bookmark.outcomeLabel ?? null,
       initialTab: tab === 'alerts' ? 'alerts' : 'analytics',
     });
     router.replace(asRoute('/trade'), { scroll: false });
@@ -178,6 +183,8 @@ export default function TradeClient() {
                               marketId: bookmark.marketId,
                               bookmarkedAt: bookmark.createdAt,
                               entryPrice: bookmark.entryPrice,
+                              outcomeId: bookmark.outcomeId ?? null,
+                              outcomeLabel: bookmark.outcomeLabel ?? null,
                               initialTab: 'alerts',
                             })
                           }
@@ -212,6 +219,8 @@ export default function TradeClient() {
                           marketId: bookmark.marketId,
                           bookmarkedAt: bookmark.createdAt,
                           entryPrice: bookmark.entryPrice,
+                          outcomeId: bookmark.outcomeId ?? null,
+                          outcomeLabel: bookmark.outcomeLabel ?? null,
                         })
                       }
                       className="inline-flex h-10 min-w-[130px] items-center justify-center whitespace-nowrap rounded-full border border-slate-700 px-4 text-xs font-semibold text-slate-200 transition hover:border-slate-400"
@@ -254,6 +263,8 @@ export default function TradeClient() {
           marketId={selectedAnalytics.marketId}
           bookmarkedAt={selectedAnalytics.bookmarkedAt}
           entryPrice={selectedAnalytics.entryPrice}
+          outcomeId={selectedAnalytics.outcomeId}
+          outcomeLabel={selectedAnalytics.outcomeLabel}
           alertsQuery={alertsQuery}
           initialTab={selectedAnalytics.initialTab}
           onClose={() => setSelectedAnalytics(null)}
@@ -268,6 +279,8 @@ function AnalyticsModal({
   marketId,
   bookmarkedAt,
   entryPrice,
+  outcomeId,
+  outcomeLabel,
   initialTab,
   alertsQuery,
   onClose,
@@ -276,6 +289,8 @@ function AnalyticsModal({
   marketId: string;
   bookmarkedAt: string;
   entryPrice: number;
+  outcomeId?: string | null;
+  outcomeLabel?: string | null;
   initialTab?: 'analytics' | 'alerts';
   alertsQuery: ReturnType<typeof useAlerts>;
   onClose: () => void;
@@ -285,6 +300,12 @@ function AnalyticsModal({
     price: number;
     title: string;
     category: string;
+    outcomes?: string[] | null;
+    outcomePrices?: number[] | null;
+    outcomeTokenIds?: string[] | null;
+    resolved?: boolean;
+    winningOutcome?: string | null;
+    winningOutcomeId?: string | null;
   } | null>(null);
   const bookmarkedDate = new Date(bookmarkedAt);
   const initial = Number.isFinite(entryPrice) ? entryPrice : null;
@@ -301,6 +322,12 @@ function AnalyticsModal({
           price: data.leading?.price ?? data.leading?.prob ?? 0,
           title: data.title ?? 'Unknown market',
           category: data.categoryResolved ?? 'Unknown',
+          outcomes: data.outcomes ?? null,
+          outcomePrices: data.outcomePrices ?? null,
+          outcomeTokenIds: data.outcomeTokenIds ?? null,
+          resolved: data.resolved ?? false,
+          winningOutcome: data.winningOutcome ?? null,
+          winningOutcomeId: data.winningOutcomeId ?? null,
         });
       })
       .catch((error) => {
@@ -330,7 +357,35 @@ function AnalyticsModal({
   const closedAt = market?.closedTime ?? market?.endDate ?? details?.closesAt ?? null;
   const closedDate = closedAt ? new Date(closedAt) : null;
   const isClosed = closedDate ? closedDate.getTime() <= Date.now() : false;
-  const finalPrice = isClosed && currentPrice != null ? currentPrice : null;
+  const outcomeLabels = market?.outcomes ?? details?.outcomes ?? null;
+  const outcomePrices = market?.outcomePrices ?? details?.outcomePrices ?? null;
+  const outcomeTokenIds = market?.outcomeTokenIds ?? details?.outcomeTokenIds ?? null;
+  const inferredOutcome =
+    outcomeId || outcomeLabel
+      ? null
+      : inferBookmarkOutcome({
+          entryPrice: initial,
+          outcomeLabels,
+          outcomePrices,
+          outcomeTokenIds,
+          fallbackLabel: market?.price.leadingOutcome ?? null,
+        });
+  const effectiveOutcomeId = outcomeId ?? inferredOutcome?.outcomeId ?? null;
+  const effectiveOutcomeLabel = outcomeLabel ?? inferredOutcome?.outcomeLabel ?? null;
+  const winningOutcomeId = market?.winningOutcomeId ?? details?.winningOutcomeId ?? null;
+  const winningOutcomeLabel = market?.winningOutcome ?? details?.winningOutcome ?? null;
+  const settlementPrice = resolveFinalPrice({
+    bookmarkOutcomeId: effectiveOutcomeId,
+    bookmarkOutcomeLabel: effectiveOutcomeLabel,
+    winningOutcomeId,
+    winningOutcomeLabel,
+    outcomeLabels,
+    outcomeTokenIds,
+  });
+  const resolvedFlag = market?.resolved ?? details?.resolved ?? false;
+  const isResolved = settlementPrice != null && resolvedFlag;
+  const pendingResolution = isClosed && !isResolved;
+  const finalPrice = isResolved ? settlementPrice : null;
   const entryCents = initial != null ? initial * 100 : null;
   const exitCents = finalPrice != null ? finalPrice * 100 : null;
   const plDeltaCents =
@@ -544,18 +599,21 @@ function AnalyticsModal({
                 {isClosed && closedDate && (
                   <p className="text-xs text-slate-500">{closedDate.toLocaleString()}</p>
                 )}
+                {pendingResolution && (
+                  <p className="text-xs text-amber-300">Pending resolution</p>
+                )}
               </div>
-              {isClosed && (
+              {isResolved && (
                 <div>
                   <p className="text-slate-400">Final price</p>
                   <p className="font-semibold">
-                    {currentPrice != null ? `${(currentPrice * 100).toFixed(1)}c` : 'N/A'}
+                    {finalPrice != null ? `${(finalPrice * 100).toFixed(1)}c` : 'N/A'}
                   </p>
                 </div>
               )}
             </div>
             <div className="space-y-4">
-              {isClosed && plDeltaCents != null && plPct != null && (
+              {isResolved && plDeltaCents != null && plPct != null && (
                 <div className={`h-fit rounded-2xl border p-4 ${plClass}`}>
                   <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-300">
                     <span>P/L</span>
