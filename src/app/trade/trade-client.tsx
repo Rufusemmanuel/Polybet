@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
@@ -10,6 +10,9 @@ import { useMarkets } from '@/lib/useMarkets';
 import type { MarketSummary } from '@/lib/polymarket/types';
 import { resolveFinalPrice, resolveOutcomePrice } from '@/lib/polymarket/settlement';
 import { useTheme } from '@/components/theme-context';
+import { useTradingStatus } from '@/lib/useTradingStatus';
+import { CTA_TRADE, CTA_VIEW } from '@/lib/ui/labels';
+import { SafeRemoteImage } from '@/components/ui/SafeRemoteImage';
 
 type MarketWithStrings = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
   endDate: string;
@@ -22,6 +25,7 @@ export default function TradeClient() {
   const user = sessionQuery.data?.user ?? null;
   const bookmarksQuery = useBookmarks(Boolean(user));
   const marketsQuery = useMarkets();
+  const tradingStatus = useTradingStatus();
   const router = useRouter();
   const searchParams = useSearchParams();
   type AnyRoute = Parameters<typeof router.push>[0];
@@ -35,8 +39,19 @@ export default function TradeClient() {
     initialTab?: 'analytics' | 'alerts';
   } | null>(null);
   const [removeError, setRemoveError] = useState<string | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const alertsQuery = useAlerts(Boolean(user));
   const handledDeepLink = useRef(false);
+  useEffect(() => {
+    if (!openActionMenuId) return;
+    const handleClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[data-action-menu]')) return;
+      setOpenActionMenuId(null);
+    };
+    document.addEventListener('click', handleClick);
+    return () => document.removeEventListener('click', handleClick);
+  }, [openActionMenuId]);
 
   useEffect(() => {
     if (!user) return;
@@ -101,6 +116,9 @@ export default function TradeClient() {
     }));
   }, [bookmarksQuery.data?.bookmarks, marketMap]);
 
+  const tradingDisabled =
+    tradingStatus.isLoading || !tradingStatus.data?.enabled;
+
   const alertMap = useMemo(() => {
     const alerts = alertsQuery.data?.alerts ?? [];
     return new Map(alerts.map((alert) => [alert.marketId, alert]));
@@ -155,10 +173,12 @@ export default function TradeClient() {
     >
       <div className="mx-auto max-w-5xl px-4 py-12 space-y-6">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">Trade</p>
-          <h1 className="text-3xl font-semibold">Trade</h1>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
+            Bookmarks
+          </p>
+          <h1 className="text-3xl font-semibold">Bookmarks</h1>
           <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
-            Coming soon. Start with your bookmarked markets.
+            Your saved markets in one place.
           </p>
         </div>
 
@@ -190,6 +210,15 @@ export default function TradeClient() {
                 const title = market?.title ?? bookmark.title ?? 'Unknown market';
                 const category = market?.category ?? bookmark.category ?? 'Unknown';
                 const marketUrl = market?.url ?? bookmark.marketUrl ?? '#';
+                const marketImage =
+                  market?.thumbnailUrl ??
+                  (market as Record<string, unknown> | undefined)?.image ??
+                  (market as Record<string, unknown> | undefined)?.imageUrl ??
+                  (market as Record<string, unknown> | undefined)?.icon ??
+                  null;
+                const fallbackInitial =
+                  category?.trim()?.charAt(0)?.toUpperCase() ??
+                  title.trim().charAt(0).toUpperCase();
                 const alert = alertMap.get(bookmark.marketId);
                 return (
                 <div
@@ -198,60 +227,93 @@ export default function TradeClient() {
                     isDark ? 'border-slate-800 bg-[#0b1224]' : 'border-slate-200 bg-slate-50'
                   }`}
                 >
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <p className={`text-sm ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {category}
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p
-                        className={`truncate text-base font-semibold ${
-                          isDark ? 'text-slate-100' : 'text-slate-900'
-                        }`}
-                        title={title}
-                      >
-                        {title}
-                      </p>
-                      {alert && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedAnalytics({
-                              marketId: bookmark.marketId,
-                              bookmarkedAt: bookmark.createdAt,
-                              entryPrice: bookmark.entryPrice,
-                              outcomeId: bookmark.outcomeId ?? null,
-                              outcomeLabel: bookmark.outcomeLabel ?? null,
-                              initialTab: 'alerts',
-                            })
-                          }
-                          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                            alert.enabled
-                              ? isDark
-                                ? 'border-blue-500/60 text-blue-100 hover:border-blue-400'
-                                : 'border-blue-200 text-blue-700 hover:border-blue-300'
-                              : isDark
-                                ? 'border-slate-700 text-slate-400 hover:border-slate-500'
-                                : 'border-slate-300 text-slate-500 hover:border-slate-400'
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-3">
+                      {marketImage ? (
+                        <div
+                          className={`relative h-10 w-10 overflow-hidden rounded-xl border ${
+                            isDark ? 'border-white/10 bg-white/5' : 'border-slate-200 bg-white'
                           }`}
                         >
-                          <span aria-hidden="true">🔔</span>
-                          <span>
-                            {[
-                              alert.profitThresholdPct != null
-                                ? `+${alert.profitThresholdPct.toFixed(0)}`
-                                : null,
-                              alert.lossThresholdPct != null
-                                ? `-${alert.lossThresholdPct.toFixed(0)}`
-                                : null,
-                            ]
-                              .filter(Boolean)
-                              .join(' / ') || 'Alert'}
-                          </span>
-                        </button>
+                          <SafeRemoteImage
+                            src={String(marketImage)}
+                            alt={title}
+                            fill
+                            sizes="40px"
+                            className="object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div
+                          className={`flex h-10 w-10 items-center justify-center rounded-xl border text-sm font-semibold ${
+                            isDark ? 'border-white/10 bg-white/5 text-slate-200' : 'border-slate-200 bg-white text-slate-700'
+                          }`}
+                        >
+                          {fallbackInitial}
+                        </div>
                       )}
+                      <div className="min-w-0 space-y-2">
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                            isDark
+                              ? 'border-white/10 bg-white/5 text-slate-300'
+                              : 'border-slate-200 bg-white text-slate-600'
+                          }`}
+                        >
+                          {category}
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className={`truncate text-base font-semibold ${
+                              isDark ? 'text-slate-100' : 'text-slate-900'
+                            }`}
+                            title={title}
+                          >
+                            {title}
+                          </p>
+                          {alert && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedAnalytics({
+                                  marketId: bookmark.marketId,
+                                  bookmarkedAt: bookmark.createdAt,
+                                  entryPrice: bookmark.entryPrice,
+                                  outcomeId: bookmark.outcomeId ?? null,
+                                  outcomeLabel: bookmark.outcomeLabel ?? null,
+                                  initialTab: 'alerts',
+                                })
+                              }
+                              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                alert.enabled
+                                  ? isDark
+                                    ? 'border-blue-500/60 text-blue-100 hover:border-blue-400'
+                                    : 'border-blue-200 text-blue-700 hover:border-blue-300'
+                                  : isDark
+                                    ? 'border-slate-700 text-slate-400 hover:border-slate-500'
+                                    : 'border-slate-300 text-slate-500 hover:border-slate-400'
+                              }`}
+                            >
+                              <span aria-hidden="true">!</span>
+                              <span>
+                                {[
+                                  alert.profitThresholdPct != null
+                                    ? `+${alert.profitThresholdPct.toFixed(0)}`
+                                    : null,
+                                  alert.lossThresholdPct != null
+                                    ? `-${alert.lossThresholdPct.toFixed(0)}`
+                                    : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(' / ') || 'Alert'}
+                              </span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex w-full flex-col gap-3 sm:w-[420px] sm:flex-shrink-0 sm:flex-row sm:justify-end">
+                  <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-[420px] sm:flex-shrink-0 sm:flex-nowrap">
                     <button
                       type="button"
                       onClick={() =>
@@ -263,7 +325,7 @@ export default function TradeClient() {
                           outcomeLabel: bookmark.outcomeLabel ?? null,
                         })
                       }
-                      className={`inline-flex h-10 min-w-[130px] items-center justify-center whitespace-nowrap rounded-full border px-4 text-xs font-semibold transition hover:border-slate-400 ${
+                      className={`inline-flex h-9 min-w-[120px] items-center justify-center whitespace-nowrap rounded-full border px-4 text-xs font-semibold transition hover:border-slate-400 ${
                         isDark
                           ? 'border-slate-700 text-slate-200'
                           : 'border-slate-300 text-slate-700'
@@ -273,31 +335,92 @@ export default function TradeClient() {
                     </button>
                     <button
                       type="button"
-                      onClick={async () => {
-                        setRemoveError(null);
-                        try {
-                          await bookmarksQuery.removeBookmark(bookmark.marketId);
-                        } catch (error) {
-                          console.error('[trade] remove bookmark error', error);
-                          setRemoveError('Unable to remove bookmark. Please try again.');
-                        }
-                      }}
-                      className={`inline-flex h-10 min-w-[110px] items-center justify-center whitespace-nowrap rounded-full border px-4 text-xs font-semibold transition hover:border-red-400 ${
-                        isDark
-                          ? 'border-red-500/60 text-red-200'
-                          : 'border-red-300 text-red-600'
+                      disabled={tradingDisabled}
+                      onClick={() =>
+                        router.push(asRoute(`/trade/${encodeURIComponent(bookmark.marketId)}`))
+                      }
+                      className={`inline-flex h-9 min-w-[120px] items-center justify-center whitespace-nowrap rounded-full px-4 text-xs font-semibold transition ${
+                        tradingDisabled
+                          ? 'bg-slate-400 text-white'
+                          : 'bg-emerald-500 text-white hover:bg-emerald-600'
                       }`}
                     >
-                      Remove
+                      {CTA_TRADE}
                     </button>
-                    <a
-                      href={marketUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex h-10 min-w-[180px] items-center justify-center whitespace-nowrap rounded-full bg-[#002cff] px-4 text-xs font-semibold text-white transition hover:bg-blue-700"
-                    >
-                      Trade on Polymarket
-                    </a>
+                    <div className="relative" data-action-menu>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenActionMenuId((current) =>
+                            current === bookmark.marketId ? null : bookmark.marketId,
+                          )
+                        }
+                        className={`inline-flex h-9 min-w-[110px] items-center justify-center gap-2 whitespace-nowrap rounded-full border px-4 text-xs font-semibold transition ${
+                          isDark
+                            ? 'border-slate-700 text-slate-200 hover:border-slate-500'
+                            : 'border-slate-300 text-slate-700 hover:border-slate-400'
+                        }`}
+                        aria-haspopup="menu"
+                        aria-expanded={openActionMenuId === bookmark.marketId}
+                      >
+                        Action
+                        <svg
+                          viewBox="0 0 20 20"
+                          aria-hidden="true"
+                          className="h-3.5 w-3.5"
+                          fill="currentColor"
+                        >
+                          <path d="M5.5 7.5 10 12l4.5-4.5-1.4-1.4L10 9.2 6.9 6.1 5.5 7.5z" />
+                        </svg>
+                      </button>
+                      {openActionMenuId === bookmark.marketId && (
+                        <div
+                          className={`absolute right-0 z-20 mt-2 w-32 rounded-xl border p-1 text-xs shadow-lg ${
+                            isDark
+                              ? 'border-white/10 bg-slate-950/95 text-slate-100'
+                              : 'border-slate-200 bg-white text-slate-900'
+                          }`}
+                          role="menu"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setOpenActionMenuId(null);
+                              window.open(marketUrl, '_blank', 'noopener,noreferrer');
+                            }}
+                            className={`w-full rounded-lg px-3 py-2 text-left transition ${
+                              isDark
+                                ? 'text-slate-200 hover:bg-slate-800'
+                                : 'text-slate-700 hover:bg-slate-100'
+                            }`}
+                            role="menuitem"
+                          >
+                            {CTA_VIEW}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              setOpenActionMenuId(null);
+                              setRemoveError(null);
+                              try {
+                                await bookmarksQuery.removeBookmark(bookmark.marketId);
+                              } catch (error) {
+                                console.error('[trade] remove bookmark error', error);
+                                setRemoveError('Unable to remove bookmark. Please try again.');
+                              }
+                            }}
+                            className={`w-full rounded-lg px-3 py-2 text-left transition ${
+                              isDark
+                                ? 'text-red-300 hover:bg-red-500/10'
+                                : 'text-red-600 hover:bg-red-50'
+                            }`}
+                            role="menuitem"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               )})}
@@ -362,7 +485,7 @@ function AnalyticsModal({
   useEffect(() => {
     if (market) return;
     let isMounted = true;
-    fetch(`/api/market/${marketId}`)
+    fetch(`/api/markets/${marketId}`)
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (!isMounted || !data) return;
@@ -967,3 +1090,4 @@ function AnalyticsModal({
     </div>
   );
 }
+

@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'nodejs';
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getUserFromRequest(request);

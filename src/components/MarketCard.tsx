@@ -1,6 +1,24 @@
-﻿import { differenceInMilliseconds, formatDistanceToNow } from 'date-fns';
+import { differenceInMilliseconds, formatDistanceToNow } from 'date-fns';
 import { useEffect, useMemo, useState } from 'react';
 import type { MarketSummary } from '@/lib/polymarket/types';
+import { SafeRemoteImage } from '@/components/ui/SafeRemoteImage';
+import {
+  bodyText,
+  buttonGroup,
+  buttonPrimaryEmphasis,
+  buttonSecondary,
+  buttonSecondaryLight,
+  cardBase,
+  cardHover,
+  cardLabel,
+  cardSurfaceDark,
+  cardSurfaceLight,
+  chipLive,
+  chipMutedDark,
+  chipMutedLight,
+  chipSuccess,
+} from '@/lib/ui/classes';
+import { CTA_DETAILS, CTA_TRADE, CTA_VIEW } from '@/lib/ui/labels';
 
 type MarketForCard = Omit<MarketSummary, 'endDate' | 'closedTime'> & {
   endDate: string | Date;
@@ -11,6 +29,8 @@ type Props = {
   market: MarketForCard;
   isDark: boolean;
   onOpenDetails?: (marketId: string) => void;
+  onTradeWithPolypicks?: (market: MarketForCard) => void;
+  tradingDisabled?: boolean;
   isBookmarked?: boolean;
   onToggleBookmark?: (data: {
     marketId: string;
@@ -27,6 +47,8 @@ export function MarketCard({
   market,
   isDark,
   onOpenDetails,
+  onTradeWithPolypicks,
+  tradingDisabled = false,
   isBookmarked = false,
   onToggleBookmark,
 }: Props) {
@@ -54,39 +76,50 @@ export function MarketCard({
 
     return `${minutes}m ${seconds.toString().padStart(2, '0')}s`;
   }, [remaining]);
+  const thumbUrl = market.thumbnailUrl ?? null;
+
+  const isClosed = countdownLabel === 'Closed';
+  const buttonSecondaryClass = isDark ? buttonSecondary : buttonSecondaryLight;
+  const secondaryTone = isDark ? 'border-white/15 bg-white/[0.07] text-white/90 hover:bg-white/10' : '';
+  const chipMuted = isDark ? chipMutedDark : chipMutedLight;
 
   return (
     <div
-      className={`rounded-2xl border shadow-md transition hover:-translate-y-0.5 hover:shadow-lg ${
-        isDark
-          ? 'border-slate-800 bg-[#0f182c] shadow-slate-900/60 hover:shadow-slate-900/70'
-          : 'border-slate-200 bg-white shadow-slate-200 hover:shadow-slate-300'
-      }`}
+      className={`${cardBase} ${isDark ? cardSurfaceDark : cardSurfaceLight} ${cardHover}`}
     >
-      <div className="flex flex-col gap-3 p-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <p
-              className={`text-xs uppercase tracking-wide ${
-                isDark ? 'text-slate-400' : 'text-slate-500'
-              }`}
-            >
-              {market.category}
-            </p>
-            <h3 className={`text-lg font-semibold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-              {market.title}
-            </h3>
+      <div className="flex flex-col gap-4 p-5 sm:p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            {thumbUrl && (
+              <div
+                className={`relative h-12 w-12 overflow-hidden rounded-xl border ${
+                  isDark ? 'border-slate-700 bg-slate-900/60' : 'border-slate-200 bg-slate-100'
+                }`}
+              >
+                <SafeRemoteImage
+                  src={thumbUrl}
+                  alt={market.title}
+                  fill
+                  sizes="48px"
+                  className="object-cover"
+                />
+              </div>
+            )}
+            <div>
+              <p className={`${cardLabel} ${isDark ? 'text-white/50' : 'text-slate-500'}`}>
+                {market.category}
+              </p>
+              <h3
+                className={`text-xl font-semibold leading-tight ${
+                  isDark ? 'text-slate-50' : 'text-slate-900'
+                } line-clamp-2`}
+              >
+                {market.title}
+              </h3>
+            </div>
           </div>
           <div className="flex items-center gap-2">
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                isDark
-                  ? 'border-blue-800 bg-blue-900/40 text-blue-100'
-                  : 'border-blue-200 bg-blue-50 text-[#002cff]'
-              }`}
-            >
-              Live
-            </span>
+            <span className={chipLive}>Live</span>
             <button
               type="button"
               aria-label={isBookmarked ? 'Remove bookmark' : 'Add bookmark'}
@@ -111,7 +144,7 @@ export function MarketCard({
                   })(),
                 })
               }
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition ${
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-full border text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/50 ${
                 isBookmarked
                   ? 'border-blue-500 bg-blue-600 text-white hover:bg-blue-500'
                   : isDark
@@ -133,53 +166,145 @@ export function MarketCard({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-4 text-sm">
-          <div>
-            <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>Leading side</p>
-            <p className={`text-lg font-semibold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-              {(market.price.price * 100).toFixed(1)}c ({market.price.leadingOutcome})
-            </p>
-          </div>
-          <div>
-            <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>Volume</p>
-            <p className={`text-lg font-semibold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-              ${Intl.NumberFormat().format(market.volume)}
-            </p>
-          </div>
-          <div>
-            <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>Closes</p>
-            <p className={`text-sm font-semibold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-              {formatDistanceToNow(new Date(market.endDate), { addSuffix: true })}
-            </p>
-          </div>
-          <div className="ml-auto">
-            <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>Time left</p>
-            <p className={`text-lg font-semibold ${isDark ? 'text-slate-50' : 'text-slate-900'}`}>
-              {countdownLabel}
-            </p>
+
+        <div
+          className={`rounded-xl border px-4 py-3 ${
+            isDark ? 'border-white/10 bg-white/[0.03]' : 'border-slate-200 bg-slate-50'
+          }`}
+        >
+          <div className="grid gap-4 sm:grid-cols-[1.2fr_1fr_1fr_auto] sm:items-center">
+            <div>
+              <p className={`${bodyText} ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                Leading side
+              </p>
+              <div className={`mt-2 ${chipSuccess}`}>
+                <span>{market.price.leadingOutcome}</span>
+                <span className="h-3 w-px bg-current/30" />
+                <span>{(market.price.price * 100).toFixed(1)}c</span>
+              </div>
+            </div>
+            <div>
+              <p className={`${bodyText} ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                Volume
+              </p>
+              <p
+                className={`text-lg font-semibold ${
+                  isDark ? 'text-slate-50' : 'text-slate-900'
+                }`}
+              >
+                ${Intl.NumberFormat().format(market.volume)}
+              </p>
+            </div>
+            <div>
+              <p className={`${bodyText} ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                Closes
+              </p>
+              <p
+                className={`text-sm font-semibold ${
+                  isDark ? 'text-slate-50' : 'text-slate-900'
+                }`}
+              >
+                {formatDistanceToNow(new Date(market.endDate), { addSuffix: true })}
+              </p>
+            </div>
+            <div className="sm:text-right">
+              <p className={`${bodyText} ${isDark ? 'text-white/60' : 'text-slate-500'}`}>
+                {isClosed ? 'Status' : 'Time left'}
+              </p>
+              {isClosed ? (
+                <span className={`mt-2 ${chipMuted}`}>Closed</span>
+              ) : (
+                <p
+                  className={`text-lg font-semibold ${
+                    isDark ? 'text-slate-50' : 'text-slate-900'
+                  }`}
+                >
+                  {countdownLabel}
+                </p>
+              )}
+            </div>
           </div>
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <a
-            href={market.url}
-            target="_blank"
-            rel="noreferrer"
-            className="w-full whitespace-nowrap rounded-full bg-[#002cff] px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700 sm:w-auto sm:px-4 sm:text-sm"
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={`${buttonGroup} w-full max-w-[360px] sm:w-auto`}>
+            <div className="grid w-full grid-cols-3 gap-2">
+            <button
+              type="button"
+              onClick={() => onTradeWithPolypicks?.(market)}
+              disabled={tradingDisabled}
+              className={`${buttonPrimaryEmphasis} h-9 w-full justify-center px-4 text-sm font-medium`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M5 12h14" />
+                  <path d="M13 6l6 6-6 6" />
+                </svg>
+                {CTA_TRADE}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onOpenDetails?.(market.id)}
+              className={`${buttonSecondaryClass} ${secondaryTone} h-9 w-full justify-center px-4 text-sm font-medium`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 16v-4" />
+                  <path d="M12 8h.01" />
+                </svg>
+                {CTA_DETAILS}
+              </span>
+            </button>
+            <a
+              href={market.url}
+              target="_blank"
+              rel="noreferrer"
+              className={`${buttonSecondaryClass} ${secondaryTone} h-9 w-full justify-center px-4 text-sm font-medium`}
+            >
+              <span className="inline-flex items-center gap-2">
+                <svg
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                  className="h-4 w-4"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M14 3h7v7" />
+                  <path d="M10 14L21 3" />
+                  <path d="M21 14v7h-7" />
+                  <path d="M3 10V3h7" />
+                </svg>
+                {CTA_VIEW}
+              </span>
+            </a>
+            </div>
+          </div>
+          <span
+            className={`whitespace-nowrap text-xs ${isDark ? 'text-white/40' : 'text-slate-500'}`}
           >
-            Trade on Polymarket
-          </a>
-          <button
-            type="button"
-            onClick={() => onOpenDetails?.(market.id)}
-            className={`w-full whitespace-nowrap rounded-full border px-3 py-2 text-xs font-semibold transition sm:w-auto sm:px-4 sm:text-sm ${
-              isDark
-                ? 'border-slate-600 text-slate-200 hover:border-slate-400'
-                : 'border-slate-300 text-slate-700 hover:border-slate-500'
-            }`}
-          >
-            Market details
-          </button>
-          <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
             ID:{' '}
             <span className={`font-mono ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
               {market.id}
@@ -190,3 +315,5 @@ export function MarketCard({
     </div>
   );
 }
+
+

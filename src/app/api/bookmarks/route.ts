@@ -9,6 +9,10 @@ import {
   resolveLeadingOutcome,
 } from '@/lib/polymarket/settlement';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'nodejs';
+
 type BookmarkPayload = {
   marketId?: string;
   entryPrice?: number;

@@ -20,7 +20,7 @@ export function MarketDetailsDrawer({ marketId, isOpen, isDark, onClose }: Props
     let isMounted = true;
     setLoading(true);
     setError(null);
-    fetch(`/api/market/${marketId}`)
+    fetch(`/api/markets/${marketId}`)
       .then((res) => {
         if (!res.ok) throw new Error('Unable to load market details');
         return res.json();

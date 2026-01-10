@@ -47,8 +47,30 @@ model User {
   createdAt    DateTime   @default(now())
   sessions     Session[]
   bookmarks    Bookmark[]
+  routedTrades RoutedTrade[]
   alerts       Alert[]
   notifications Notification[]
+}
+
+model RoutedTrade {
+  id             String   @id @default(cuid())
+  userId         String
+  marketId       String
+  conditionId    String?
+  outcome        String
+  outcomeTokenId String?
+  side           String
+  size           Float
+  price          Float
+  orderId        String?
+  status         String?
+  rawResponse    Json?
+  createdAt      DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([marketId])
 }
 
 model Session {

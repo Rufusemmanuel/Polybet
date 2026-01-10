@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getUserFromRequest } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const runtime = 'nodejs';
+
 type Params = { params: { marketId: string } };
 
 export async function DELETE(request: NextRequest, { params }: Params) {

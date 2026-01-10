@@ -177,9 +177,15 @@ export async function GET(_: Request, { params }: Params) {
       }
     }
 
+    const resolvedThumbnail =
+      market.thumbnailUrl ??
+      sports?.matchup?.crestA ??
+      sports?.matchup?.crestB ??
+      null;
     const payload: MarketDetailsResponse = {
       ...market,
       ...(sports ? { sports } : {}),
+      thumbnailUrl: resolvedThumbnail,
       sportsMeta,
     };
 
@@ -187,7 +193,14 @@ export async function GET(_: Request, { params }: Params) {
       headers: { 'Cache-Control': 's-maxage=10, stale-while-revalidate=60' },
     });
   } catch (err) {
-    console.error('[PolyPicks] /api/market/[id] error:', err);
+    if (err instanceof Error && err.message.includes('Polymarket request failed')) {
+      console.warn('[PolyPicks] /api/markets/[id] upstream non-OK', {
+        id: params.id,
+        error: err.message,
+      });
+    } else {
+      console.error('[PolyPicks] /api/markets/[id] error:', err);
+    }
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

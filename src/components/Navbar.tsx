@@ -11,6 +11,13 @@ import { SignUpModal } from '@/components/SignUpModal';
 import { LoginModal } from '@/components/LoginModal';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { useTheme } from '@/components/theme-context';
+import {
+  buttonPrimary,
+  buttonSecondaryDark,
+  buttonSecondaryLight,
+  iconButtonDark,
+  iconButtonLight,
+} from '@/lib/ui/classes';
 
 const navItems = [
   { label: 'Markets', href: '/' as const, kind: 'link' as const },
@@ -105,24 +112,42 @@ export function Navbar() {
     router.push(asRoute('/'));
   };
 
+  const navLinkClass = (href: string) => {
+    const isActive = pathname === href;
+    return `rounded-full px-4 py-2 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+      isActive
+        ? isDark
+          ? 'bg-white/10 text-white'
+          : 'bg-slate-900 text-white'
+        : isDark
+          ? 'text-slate-300 hover:bg-white/5 hover:text-white'
+          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+    }`;
+  };
+
+  const iconButtonClass = isDark ? iconButtonDark : iconButtonLight;
+  const buttonSecondary = isDark ? buttonSecondaryDark : buttonSecondaryLight;
+
   return (
     <header
-      className={`border-b ${
-        isDark ? 'border-slate-800 bg-[#0b1224] text-slate-100' : 'border-slate-200 bg-white text-slate-900'
+      className={`sticky top-0 z-50 border-b backdrop-blur ${
+        isDark
+          ? 'border-slate-800/80 bg-[#0b1224]/80 text-slate-100'
+          : 'border-slate-200/80 bg-white/80 text-slate-900'
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
+      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link href="/" className="flex items-center gap-3">
           <Image src="/polypicks.png" alt="PolyPicks logo" width={32} height={32} />
-          <span className="text-xl font-semibold">PolyPicks</span>
+          <span className="text-2xl font-semibold tracking-tight">PolyPicks</span>
         </Link>
-        <nav className="hidden items-center gap-6 text-sm font-medium md:flex">
+        <nav className="hidden items-center gap-2 text-sm md:flex">
           {navItems.map((item) =>
             item.kind === 'link' ? (
               <Link
                 key={item.href}
                 href={item.href}
-                className={isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'}
+                className={navLinkClass(item.href)}
               >
                 {item.label}
               </Link>
@@ -130,7 +155,7 @@ export function Navbar() {
               <a
                 key={item.href}
                 href={item.href}
-                className={isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'}
+                className={navLinkClass(item.href)}
               >
                 {item.label}
               </a>
@@ -138,24 +163,20 @@ export function Navbar() {
           )}
         </nav>
         <div className="flex items-center gap-2">
-          <ThemeToggle />
+          <ThemeToggle variant="icon" className={iconButtonClass} />
           {!user && (
             <>
               <button
                 type="button"
                 onClick={() => setIsLoginOpen(true)}
-                className={`rounded-full border px-4 py-1.5 text-xs font-semibold transition ${
-                  isDark
-                    ? 'border-slate-700 text-slate-200 hover:border-slate-400'
-                    : 'border-slate-300 text-slate-700 hover:border-slate-400'
-                }`}
+                className={`${buttonSecondary} h-9 px-4 text-xs font-semibold`}
               >
                 Log in
               </button>
               <button
                 type="button"
                 onClick={() => setIsSignUpOpen(true)}
-                className="rounded-full bg-[#002cff] px-4 py-1.5 text-xs font-semibold text-white transition hover:bg-blue-700"
+                className={`${buttonPrimary} h-9 px-4 text-xs font-semibold`}
               >
                 Sign up
               </button>
@@ -170,11 +191,7 @@ export function Navbar() {
                     setIsNotificationsOpen((open) => !open);
                     setIsMenuOpen(false);
                   }}
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-full border transition ${
-                    isDark
-                      ? 'border-slate-700 text-slate-200 hover:border-slate-400'
-                      : 'border-slate-300 text-slate-700 hover:border-slate-400'
-                  }`}
+                  className={iconButtonClass}
                   aria-label="Notifications"
                 >
                   <svg
@@ -269,26 +286,34 @@ export function Navbar() {
                     setIsMenuOpen((open) => !open);
                     setIsNotificationsOpen(false);
                   }}
-                  className={`flex items-center gap-2 rounded-full border px-2 py-1.5 text-xs font-semibold transition ${
-                    isDark
-                      ? 'border-slate-700 text-slate-200 hover:border-slate-400'
-                      : 'border-slate-300 text-slate-700 hover:border-slate-400'
-                  }`}
+                  className={`${buttonSecondary} h-9 gap-2 px-3 text-sm font-semibold`}
                 >
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#002cff] text-[11px] text-white">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#002cff] text-[11px] text-white">
                     {initials}
                   </span>
-                  <span className="hidden sm:inline">{user.name}</span>
+                  <span className="hidden max-w-[140px] truncate sm:inline">
+                    {user.name}
+                  </span>
+                  <svg
+                    viewBox="0 0 20 20"
+                    aria-hidden="true"
+                    className="h-4 w-4 text-slate-400"
+                    fill="currentColor"
+                  >
+                    <path d="M5.5 7.5 10 12l4.5-4.5-1.4-1.4L10 9.2 6.9 6.1 5.5 7.5z" />
+                  </svg>
                 </button>
                 {isMenuOpen && (
                   <div
-                    className={`absolute right-0 z-50 mt-2 w-40 rounded-xl border p-2 text-sm shadow-xl ${
-                      isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
+                    className={`absolute right-0 z-50 mt-3 w-44 rounded-xl border p-2 text-sm shadow-lg backdrop-blur ${
+                      isDark
+                        ? 'border-white/10 bg-slate-950/95 text-slate-100'
+                        : 'border-slate-200 bg-white/95 text-slate-900'
                     }`}
                   >
                     <Link
                       href="/profile"
-                      className={`block rounded-lg px-3 py-2 ${
+                      className={`block rounded-lg px-3 py-2 transition ${
                         isDark
                           ? 'text-slate-200 hover:bg-slate-800'
                           : 'text-slate-700 hover:bg-slate-100'
@@ -299,18 +324,18 @@ export function Navbar() {
                     </Link>
                     <Link
                       href="/trade"
-                      className={`block rounded-lg px-3 py-2 ${
+                      className={`block rounded-lg px-3 py-2 transition ${
                         isDark
                           ? 'text-slate-200 hover:bg-slate-800'
                           : 'text-slate-700 hover:bg-slate-100'
                       }`}
                       onClick={() => setIsMenuOpen(false)}
                     >
-                      Trades
+                      Bookmarks
                     </Link>
                     <Link
                       href="/history"
-                      className={`block rounded-lg px-3 py-2 ${
+                      className={`block rounded-lg px-3 py-2 transition ${
                         isDark
                           ? 'text-slate-200 hover:bg-slate-800'
                           : 'text-slate-700 hover:bg-slate-100'
@@ -321,8 +346,22 @@ export function Navbar() {
                     </Link>
                     <button
                       type="button"
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        router.push(asRoute('/wallet'));
+                      }}
+                      className={`w-full rounded-lg px-3 py-2 text-left transition ${
+                        isDark
+                          ? 'text-slate-200 hover:bg-slate-800'
+                          : 'text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      Wallet
+                    </button>
+                    <button
+                      type="button"
                       onClick={handleLogout}
-                      className={`w-full rounded-lg px-3 py-2 text-left ${
+                      className={`w-full rounded-lg px-3 py-2 text-left transition ${
                         isDark
                           ? 'text-slate-200 hover:bg-slate-800'
                           : 'text-slate-700 hover:bg-slate-100'

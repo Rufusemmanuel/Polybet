@@ -37,6 +37,24 @@ type HistoryResponse = {
   total: number;
 };
 
+type RoutedTrade = {
+  id: string;
+  marketId: string;
+  conditionId?: string | null;
+  outcome: string;
+  outcomeTokenId?: string | null;
+  side: string;
+  size: number;
+  price: number;
+  orderId?: string | null;
+  status?: string | null;
+  createdAt: string;
+};
+
+type RoutedTradesResponse = {
+  trades: RoutedTrade[];
+};
+
 const TIMEFRAMES = [
   { label: '1D', value: '1d' },
   { label: '7D', value: '7d' },
@@ -49,6 +67,12 @@ const fetchHistory = async (timeframe: string): Promise<HistoryResponse> => {
   const res = await fetch(`/api/history?timeframe=${encodeURIComponent(timeframe)}`);
   if (!res.ok) throw new Error('Unable to load history');
   return (await res.json()) as HistoryResponse;
+};
+
+const fetchRoutedTrades = async (): Promise<RoutedTradesResponse> => {
+  const res = await fetch('/api/routed-trades');
+  if (!res.ok) throw new Error('Unable to load routed trades');
+  return (await res.json()) as RoutedTradesResponse;
 };
 
 const formatPrice = (price: number | null) =>
@@ -140,8 +164,8 @@ function TradeHistoryMobileCard({ row }: { row: HistoryRow }) {
   const statusClass =
     row.status === 'Removed'
       ? isDark
-        ? 'border-red-500/40 text-red-200'
-        : 'border-red-200 text-red-600'
+        ? 'border-white/10 text-slate-300'
+        : 'border-slate-200 text-slate-600'
       : row.status === 'Closed'
         ? isDark
           ? 'border-emerald-500/40 text-emerald-200'
@@ -289,6 +313,12 @@ export default function HistoryPage() {
   const historyQuery = useQuery({
     queryKey: ['history', timeframe],
     queryFn: () => fetchHistory(timeframe),
+    enabled: Boolean(user),
+    staleTime: 1000 * 30,
+  });
+  const routedTradesQuery = useQuery({
+    queryKey: ['routed-trades'],
+    queryFn: fetchRoutedTrades,
     enabled: Boolean(user),
     staleTime: 1000 * 30,
   });
@@ -490,7 +520,7 @@ export default function HistoryPage() {
     >
       <div className="mx-auto max-w-6xl px-4 py-12 space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+          <div className="space-y-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
               History
             </p>
@@ -499,7 +529,7 @@ export default function HistoryPage() {
               Track performance across all bookmarks, even removed ones.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             {TIMEFRAMES.map((option) => {
               const isActive = option.value === timeframe;
               return (
@@ -507,9 +537,11 @@ export default function HistoryPage() {
                   key={option.value}
                   type="button"
                   onClick={() => setTimeframe(option.value)}
-                  className={`rounded-full border px-4 py-1.5 text-xs font-semibold uppercase tracking-wide transition ${
+                  className={`h-9 rounded-full border px-4 text-xs font-semibold uppercase tracking-wide transition ${
                     isActive
-                      ? 'border-blue-400 bg-blue-500/20 text-blue-100'
+                      ? isDark
+                        ? 'border-blue-400/60 bg-blue-500/20 text-blue-100'
+                        : 'border-blue-300 bg-blue-100 text-blue-700'
                       : isDark
                         ? 'border-slate-700 text-slate-300 hover:border-slate-500'
                         : 'border-slate-300 text-slate-600 hover:border-slate-400'
@@ -523,9 +555,9 @@ export default function HistoryPage() {
         </div>
 
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div
-              className={`rounded-2xl border p-4 ${
+              className={`rounded-2xl border p-5 ${
                 isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
               }`}
             >
@@ -536,10 +568,10 @@ export default function HistoryPage() {
               >
                 Trades
               </p>
-              <p className="mt-2 text-2xl font-semibold">{summary.count}</p>
+              <p className="mt-3 text-2xl font-semibold">{summary.count}</p>
             </div>
             <div
-              className={`rounded-2xl border p-4 ${
+              className={`rounded-2xl border p-5 ${
                 isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
               }`}
             >
@@ -550,12 +582,12 @@ export default function HistoryPage() {
               >
                 Win rate
               </p>
-              <p className="mt-2 text-2xl font-semibold">
+              <p className="mt-3 text-2xl font-semibold">
                 {summary.winRate == null ? 'N/A' : `${summary.winRate.toFixed(1)}%`}
               </p>
             </div>
             <div
-              className={`rounded-2xl border p-4 ${
+              className={`rounded-2xl border p-5 ${
                 isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
               }`}
             >
@@ -567,7 +599,7 @@ export default function HistoryPage() {
                 Total P/L
               </p>
               <p
-                className={`mt-2 text-2xl font-semibold ${
+                className={`mt-3 text-2xl font-semibold ${
                   summary.totalPL > 0
                     ? isDark
                       ? 'text-emerald-300'
@@ -584,46 +616,116 @@ export default function HistoryPage() {
                 {formatSigned(summary.totalPL * 100)}
               </p>
             </div>
-            <div
-              className={`rounded-2xl border p-4 md:col-span-2 lg:col-span-2 ${
-                isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <p
-                  className={`text-xs uppercase tracking-wide ${
-                    isDark ? 'text-slate-400' : 'text-slate-500'
-                  }`}
-                >
-                  Best trade
-                </p>
-                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                  {summary.best?.returnPct != null
-                    ? formatPct(summary.best.returnPct)
-                    : 'N/A'}
-                </span>
-              </div>
-              <p className={`mt-2 text-sm ${isDark ? 'text-slate-100' : 'text-slate-900'}`}>
-                {summary.best?.title ?? 'N/A'}
-              </p>
-              <p
-                className={`mt-4 text-xs uppercase tracking-wide ${
-                  isDark ? 'text-slate-400' : 'text-slate-500'
+          </div>
+
+          <div
+            className={`rounded-2xl border p-6 ${
+              isDark ? 'border-slate-800 bg-[#0f182c]' : 'border-slate-200 bg-white'
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <h2
+                className={`text-sm font-semibold uppercase tracking-wide ${
+                  isDark ? 'text-slate-300' : 'text-slate-600'
                 }`}
               >
-                Worst trade
-              </p>
-              <div className="mt-2 flex items-center justify-between gap-4">
-                <p className={`text-sm ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>
-                  {summary.worst?.title ?? 'N/A'}
-                </p>
-                <span className={`text-xs ${isDark ? 'text-slate-500' : 'text-slate-500'}`}>
-                  {summary.worst?.returnPct != null
-                    ? formatPct(summary.worst.returnPct)
-                    : 'N/A'}
+                Executed trades
+              </h2>
+              {routedTradesQuery.isLoading && (
+                <span className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Loading...
                 </span>
-              </div>
+              )}
             </div>
+            {routedTradesQuery.isError && (
+              <p className={`mt-3 text-sm ${isDark ? 'text-red-300' : 'text-red-600'}`}>
+                Unable to load executed trades.
+              </p>
+            )}
+            {!routedTradesQuery.isLoading &&
+              (routedTradesQuery.data?.trades.length ?? 0) === 0 && (
+                <p className={`mt-3 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                  No routed trades yet.
+                </p>
+              )}
+            {routedTradesQuery.data?.trades.length ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead
+                    className={`text-left text-xs uppercase tracking-wide ${
+                      isDark ? 'text-slate-400' : 'text-slate-500'
+                    }`}
+                  >
+                    <tr
+                      className={`sticky top-0 ${
+                        isDark ? 'bg-[#0f182c]' : 'bg-white'
+                      }`}
+                    >
+                      <th className="px-3 py-2">Time</th>
+                      <th className="px-3 py-2">Market</th>
+                      <th className="px-3 py-2">Outcome</th>
+                      <th className="px-3 py-2">Side</th>
+                      <th className="px-3 py-2 text-right">Size</th>
+                      <th className="px-3 py-2 text-right">Price</th>
+                      <th className="px-3 py-2">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
+                    {routedTradesQuery.data.trades.map((trade) => (
+                      <tr
+                        key={trade.id}
+                        className={isDark ? 'hover:bg-[#111b33]' : 'hover:bg-slate-50'}
+                      >
+                        <td className={`px-3 py-3 ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                          {new Date(trade.createdAt).toLocaleString()}
+                        </td>
+                        <td className={`px-3 py-3 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          <span className="block max-w-[200px] truncate font-mono text-xs">
+                            {trade.marketId}
+                          </span>
+                        </td>
+                        <td className={`px-3 py-3 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {trade.outcome}
+                        </td>
+                        <td className={`px-3 py-3 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {trade.side}
+                        </td>
+                        <td className={`px-3 py-3 text-right ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {trade.size}
+                        </td>
+                        <td className={`px-3 py-3 text-right ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                          {formatPrice(trade.price)}
+                        </td>
+                        <td className="px-3 py-3">
+                          {(() => {
+                            const normalized = (trade.status ?? 'submitted').toLowerCase();
+                            const badgeClass =
+                              normalized === 'matched'
+                                ? isDark
+                                  ? 'border-emerald-400/30 text-emerald-200'
+                                  : 'border-emerald-200 text-emerald-700'
+                                : normalized === 'submitted'
+                                  ? isDark
+                                    ? 'border-white/10 text-slate-300'
+                                    : 'border-slate-200 text-slate-600'
+                                  : isDark
+                                    ? 'border-white/10 text-slate-300'
+                                    : 'border-slate-200 text-slate-600';
+                            return (
+                              <span
+                                className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-semibold ${badgeClass}`}
+                              >
+                                {trade.status ?? 'Submitted'}
+                              </span>
+                            );
+                          })()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
           </div>
 
           <div
@@ -646,12 +748,12 @@ export default function HistoryPage() {
                   </span>
                 )}
               </div>
-              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={exportAsPng}
                   disabled={isExporting != null}
-                  className={`inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-full border px-4 text-xs font-semibold transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 ${
                     isDark
                       ? 'border-slate-700 text-slate-200'
                       : 'border-slate-300 text-slate-700'
@@ -663,7 +765,7 @@ export default function HistoryPage() {
                   type="button"
                   onClick={exportAsPdf}
                   disabled={isExporting != null}
-                  className={`inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border px-4 py-2.5 text-xs font-semibold transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto ${
+                  className={`inline-flex h-9 items-center justify-center gap-2 rounded-full border px-4 text-xs font-semibold transition hover:border-slate-400 disabled:cursor-not-allowed disabled:opacity-60 ${
                     isDark
                       ? 'border-slate-700 text-slate-200'
                       : 'border-slate-300 text-slate-700'
@@ -700,13 +802,13 @@ export default function HistoryPage() {
                         isDark ? 'text-slate-400' : 'text-slate-500'
                       }`}
                     >
-                      <tr>
+                      <tr className={`${isDark ? 'bg-[#0f182c]' : 'bg-white'} sticky top-0`}>
                         <th className="px-3 py-2">Market</th>
                         <th className="px-3 py-2">Bookmarked</th>
-                        <th className="px-3 py-2">Entry</th>
-                        <th className="px-3 py-2">Final / Current</th>
-                        <th className="px-3 py-2">P/L</th>
-                        <th className="px-3 py-2">Return</th>
+                        <th className="px-3 py-2 text-right">Entry</th>
+                        <th className="px-3 py-2 text-right">Final / Current</th>
+                        <th className="px-3 py-2 text-right">P/L</th>
+                        <th className="px-3 py-2 text-right">Return</th>
                         <th className="px-3 py-2">Status</th>
                       </tr>
                     </thead>
@@ -731,8 +833,8 @@ export default function HistoryPage() {
                         const statusClass =
                           row.status === 'Removed'
                             ? isDark
-                              ? 'border-red-500/40 text-red-200'
-                              : 'border-red-200 text-red-600'
+                              ? 'border-white/10 text-slate-300'
+                              : 'border-slate-200 text-slate-600'
                             : row.status === 'Closed'
                               ? isDark
                                 ? 'border-emerald-500/40 text-emerald-200'
@@ -771,18 +873,18 @@ export default function HistoryPage() {
                                 {new Date(row.createdAt).toLocaleTimeString()}
                               </div>
                             </td>
-                            <td className={`px-3 py-3 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            <td className={`px-3 py-3 text-right ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                               {formatPrice(row.entryPrice)}
                             </td>
-                            <td className={`px-3 py-3 ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
+                            <td className={`px-3 py-3 text-right ${isDark ? 'text-slate-200' : 'text-slate-700'}`}>
                               {formatPrice(row.latestPrice)}
                             </td>
-                            <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                            <td className={`px-3 py-3 text-right font-semibold ${plClass}`}>
                               {formatSigned(
                                 row.profitDelta != null ? row.profitDelta * 100 : null,
                               )}
                             </td>
-                            <td className={`px-3 py-3 font-semibold ${plClass}`}>
+                            <td className={`px-3 py-3 text-right font-semibold ${plClass}`}>
                               {formatPct(row.returnPct)}
                             </td>
                             <td className="px-3 py-3">
