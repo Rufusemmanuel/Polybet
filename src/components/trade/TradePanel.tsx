@@ -15,10 +15,16 @@ import { usePolymarketSession } from '@/lib/polymarket/usePolymarketSession';
 import type { OrderBookState } from '@/lib/polymarket/marketDataService';
 import { TRADE_CONFIG } from '@/lib/polymarket/tradeConfig';
 import { createAndPostOrder } from '@/lib/polymarket/tradeService';
+import { createClobClient } from '@/lib/polymarket/clobClientFactory';
 import { resolveMarketPrice } from '@/lib/polymarket/orderPricing';
 import { ensureRelayerProxy } from '@/lib/polymarket/relayerService';
 import { useInjectedWallet } from '@/hooks/useInjectedWallet';
 import { createViemSigner } from '@/lib/wallet/viemSigner';
+import { getPolygonPublicClient } from '@/lib/wallet/publicClient';
+import {
+  ensureApprovals as ensureWalletApprovals,
+  getApprovalStatus,
+} from '@/lib/polymarket/approvals';
 import {
   buttonPrimary,
   buttonSecondaryDark,
@@ -88,6 +94,16 @@ export function TradePanel({
   const [message, setMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [relayerProxy, setRelayerProxy] = useState<string | null>(null);
+  const [approvalOpen, setApprovalOpen] = useState(false);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
+  const [approvalBusy, setApprovalBusy] = useState(false);
+  const [approvalSteps, setApprovalSteps] = useState<
+    Array<{
+      key: 'usdc' | 'ctfExchange' | 'negRisk';
+      label: string;
+      status: 'pending' | 'in_progress' | 'done' | 'error';
+    }>
+  >([]);
   const {
     address,
     chainId,
@@ -100,6 +116,7 @@ export function TradePanel({
     () => (walletClient && address ? createViemSigner(walletClient, address) : null),
     [address, walletClient],
   );
+  const publicClient = useMemo(() => getPolygonPublicClient(), []);
   const [balance, setBalance] = useState<bigint | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const polymarketSession = usePolymarketSession(walletClient, address, chainId);
@@ -313,7 +330,12 @@ export function TradePanel({
       transport: custom(provider),
     });
     const signer = createViemSigner(client, result.address);
-    return { signer, chainId: result.chainId };
+    return {
+      signer,
+      chainId: result.chainId,
+      walletClient: client,
+      walletAddress: result.address,
+    };
   };
 
   const resolveFunderAddress = async (signer: ReturnType<typeof createViemSigner>) => {
@@ -334,8 +356,81 @@ export function TradePanel({
     return polymarketSession.ensureProxyDeployed({ force: true });
   };
 
-  const ensureApprovals = async () => {
-    if (TRADE_CONFIG.signatureType === 0) return;
+  const updateApprovalStep = (
+    key: 'usdc' | 'ctfExchange' | 'negRisk',
+    status: 'pending' | 'in_progress' | 'done' | 'error',
+  ) => {
+    setApprovalSteps((prev) =>
+      prev.map((step) => (step.key === key ? { ...step, status } : step)),
+    );
+  };
+
+  const buildApprovalSteps = (status: {
+    usdcAllowanceOk: boolean;
+    ctfExchangeOk: boolean;
+    negRiskOk: boolean;
+  }): Array<{
+    key: 'usdc' | 'ctfExchange' | 'negRisk';
+    label: string;
+    status: 'pending' | 'in_progress' | 'done' | 'error';
+  }> => [
+    {
+      key: 'usdc',
+      label: 'Approve USDCe for Conditional Tokens',
+      status: status.usdcAllowanceOk ? 'done' : 'pending',
+    },
+    {
+      key: 'ctfExchange',
+      label: 'Approve CTF exchange operator',
+      status: status.ctfExchangeOk ? 'done' : 'pending',
+    },
+    {
+      key: 'negRisk',
+      label: 'Approve Neg Risk exchange operator',
+      status: status.negRiskOk ? 'done' : 'pending',
+    },
+  ];
+
+  const ensureTradeApprovals = async ({
+    signer,
+    activeWalletClient,
+    walletAddress,
+  }: {
+    signer: ReturnType<typeof createViemSigner>;
+    activeWalletClient: typeof walletClient;
+    walletAddress: `0x${string}`;
+  }) => {
+    if (TRADE_CONFIG.signatureType === 0) {
+      if (!activeWalletClient) {
+        throw new Error('Wallet client unavailable.');
+      }
+      const status = await getApprovalStatus({ publicClient, walletAddress });
+      if (status.allOk) return;
+
+      setApprovalSteps(buildApprovalSteps(status));
+      setApprovalError(null);
+      setApprovalOpen(true);
+      setApprovalBusy(true);
+      try {
+        const clobClient = createClobClient({
+          signer,
+          signatureType: TRADE_CONFIG.signatureType,
+          proxyWalletAddress: walletAddress,
+          host: TRADE_CONFIG.clobHost,
+        });
+        await ensureWalletApprovals({
+          walletClient: activeWalletClient,
+          publicClient,
+          walletAddress,
+          clobClient,
+          onStep: updateApprovalStep,
+        });
+      } finally {
+        setApprovalBusy(false);
+      }
+      setApprovalOpen(false);
+      return;
+    }
     if (!polymarketSession.proxyAddress) return;
     const contractConfig = getClobContractConfig(TRADE_CONFIG.chainId);
     const exchange = negRisk ? contractConfig.negRiskExchange : contractConfig.exchange;
@@ -344,6 +439,15 @@ export function TradePanel({
     if (required > 0n) {
       await polymarketSession.ensureApprovals(collateral, exchange, required);
     }
+  };
+
+  const isUserRejected = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    return (
+      /user rejected|rejected the request|denied/i.test(message)
+      || (typeof error === 'object' && error !== null && 'code' in error
+        && (error as { code?: number }).code === 4001)
+    );
   };
 
   const handleSubmit = async () => {
@@ -375,13 +479,37 @@ export function TradePanel({
     setIsSubmitting(true);
     setMessage(null);
     try {
-      const { signer } = walletSigner ? { signer: walletSigner } : await connectWallet();
+      const connection = walletSigner
+        ? { signer: walletSigner, walletClient, walletAddress: address }
+        : await connectWallet();
+      const { signer, walletClient: connectedClient, walletAddress } = connection;
       if (!signer) {
         setMessage('Connect your wallet to continue.');
         return;
       }
+      if (!walletAddress) {
+        setMessage('Wallet address unavailable.');
+        return;
+      }
+      const activeWalletClient = connectedClient ?? walletClient;
       const funder = await resolveFunderAddress(signer);
-      await ensureApprovals();
+      try {
+        await ensureTradeApprovals({
+          signer,
+          activeWalletClient,
+          walletAddress,
+        });
+      } catch (error) {
+        if (isUserRejected(error)) {
+          setApprovalError('Approval signature rejected. Trade canceled.');
+          setMessage('Approval signature rejected. Trade canceled.');
+          return;
+        }
+        setApprovalError(
+          error instanceof Error ? error.message : 'Approval failed. Try again.',
+        );
+        throw error;
+      }
       const marketAmount =
         orderType === 'MARKET'
           ? parsedAmount
@@ -717,6 +845,95 @@ export function TradePanel({
       >
         {isSubmitting ? 'Submitting...' : 'Trade'}
       </button>
+
+      {approvalOpen && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center px-4">
+          <button
+            type="button"
+            aria-label="Close approvals"
+            className="absolute inset-0 bg-black/60"
+            onClick={() => {
+              if (!approvalBusy) setApprovalOpen(false);
+            }}
+          />
+          <div
+            className={`relative w-full max-w-lg rounded-2xl border p-6 shadow-2xl ${
+              isDark
+                ? 'border-slate-800 bg-[#0b1224] text-slate-100'
+                : 'border-slate-200 bg-white text-slate-900'
+            }`}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-400">
+                  Polymarket
+                </p>
+                <h2 className="text-2xl font-semibold">Setup approvals</h2>
+                <p className={isDark ? 'text-slate-400' : 'text-slate-500'}>
+                  Approve 3 transactions to enable trading.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApprovalOpen(false)}
+                disabled={approvalBusy}
+                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                  isDark
+                    ? 'border-slate-600 text-slate-200 hover:border-slate-400'
+                    : 'border-slate-300 text-slate-700 hover:border-slate-500'
+                } ${approvalBusy ? 'opacity-50' : ''}`}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {approvalSteps.map((step) => (
+                <div
+                  key={step.key}
+                  className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm ${
+                    isDark
+                      ? 'border-slate-800 bg-[#101a32]'
+                      : 'border-slate-200 bg-slate-50'
+                  }`}
+                >
+                  <span>{step.label}</span>
+                  <span
+                    className={
+                      step.status === 'done'
+                        ? 'text-emerald-400'
+                        : step.status === 'error'
+                          ? 'text-red-400'
+                          : step.status === 'in_progress'
+                            ? 'text-blue-400'
+                            : isDark
+                              ? 'text-slate-400'
+                              : 'text-slate-500'
+                    }
+                  >
+                    {step.status === 'done'
+                      ? 'Approved'
+                      : step.status === 'error'
+                        ? 'Failed'
+                        : step.status === 'in_progress'
+                          ? 'Waiting for signature'
+                          : 'Pending'}
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {approvalError && (
+              <p className="mt-4 text-sm text-red-400">{approvalError}</p>
+            )}
+            {approvalBusy && (
+              <p className={`mt-4 text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                Keep your wallet open to complete approvals.
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
     </div>
   );
