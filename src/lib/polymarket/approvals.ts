@@ -1,7 +1,6 @@
 import { encodeFunctionData, maxUint256 } from 'viem';
 import type { WalletClient } from 'viem';
-import type { ClobClient } from '@polymarket/clob-client';
-import { AssetType, getContractConfig } from '@polymarket/clob-client';
+import { getContractConfig } from '@polymarket/clob-client';
 import type { getPolygonPublicClient } from '@/lib/wallet/publicClient';
 
 const { collateral, conditionalTokens, exchange, negRiskExchange } =
@@ -108,13 +107,11 @@ export const ensureApprovals = async ({
   walletClient,
   publicClient,
   walletAddress,
-  clobClient,
   onStep,
 }: {
   walletClient: WalletClient;
   publicClient: PolygonPublicClient;
   walletAddress: `0x${string}`;
-  clobClient: Pick<ClobClient, 'updateBalanceAllowance'>;
   onStep?: (step: ApprovalStep, status: ApprovalStepStatus) => void;
 }) => {
   const status = await getApprovalStatus({ publicClient, walletAddress });
@@ -170,7 +167,14 @@ export const ensureApprovals = async ({
   }
 
   if (didUpdate) {
-    await clobClient.updateBalanceAllowance({ asset_type: AssetType.COLLATERAL });
+    const res = await fetch('/api/polymarket/allowance/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    if (!res.ok) {
+      const message = await res.text().catch(() => '');
+      throw new Error(message || 'Unable to refresh allowance.');
+    }
   }
 
   return getApprovalStatus({ publicClient, walletAddress });

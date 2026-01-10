@@ -1,5 +1,4 @@
 import { ClobClient, Chain, type ApiKeyCreds } from '@polymarket/clob-client';
-import type { BuilderConfig } from '@polymarket/builder-signing-sdk';
 import type { SignatureType } from '@polymarket/order-utils';
 import type { ViemSigner } from '@/lib/wallet/viemSigner';
 
@@ -16,7 +15,6 @@ type ClobClientFactoryArgs = {
   proxyWalletAddress?: string | null;
   chainId?: Chain;
   host?: string;
-  builderConfig?: BuilderConfig;
 };
 
 export const createClobClient = ({
@@ -26,7 +24,6 @@ export const createClobClient = ({
   proxyWalletAddress,
   chainId = Chain.POLYGON,
   host = 'https://clob.polymarket.com',
-  builderConfig,
 }: ClobClientFactoryArgs) => {
   const creds: ApiKeyCreds | undefined = userApiCreds
     ? {
@@ -45,6 +42,5 @@ export const createClobClient = ({
     proxyWalletAddress ?? undefined,
     undefined,
     undefined,
-    builderConfig,
   );
 };

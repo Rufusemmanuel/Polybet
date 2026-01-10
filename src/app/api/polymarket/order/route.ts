@@ -1,4 +1,6 @@
 import type { NextRequest } from 'next/server';
+import { buildHmacSignature } from '@polymarket/builder-signing-sdk';
+import { BUILDER_CREDS } from '@/lib/server/builderCreds';
 import { getSession, isSessionExpired } from '@/lib/server/session';
 import { buildL2Headers } from '@/lib/server/polymarketHeaders';
 import { createOrderHandler } from '@/lib/server/polymarketOrderHandler';
@@ -6,38 +8,37 @@ import { createOrderHandler } from '@/lib/server/polymarketOrderHandler';
 export const runtime = 'nodejs';
 
 const CLOB_HOST = process.env.POLYMARKET_CLOB_URL ?? 'https://clob.polymarket.com';
+const DEBUG_BUILDER = process.env.POLY_BUILDER_DEBUG === '1';
 
 const getBuilderHeaders = async ({
   method,
   path,
   body,
-  request,
 }: {
   method: string;
   path: string;
   body: string;
   request: Request;
 }) => {
-  const signUrl = new URL('/api/polymarket/builder/sign', request.url);
-  try {
-    const res = await fetch(signUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ method, path, body }),
+  const timestamp = Date.now();
+  const signature = buildHmacSignature(
+    BUILDER_CREDS.secret,
+    timestamp,
+    method,
+    path,
+    body,
+  );
+  if (DEBUG_BUILDER) {
+    console.info('[polymarket] builder headers', {
+      hasBuilderHeaders: Boolean(signature),
     });
-    if (!res.ok) {
-      return undefined;
-    }
-    const data = (await res.json()) as Record<string, string>;
-    return {
-      POLY_BUILDER_SIGNATURE: data.POLY_BUILDER_SIGNATURE,
-      POLY_BUILDER_TIMESTAMP: data.POLY_BUILDER_TIMESTAMP,
-      POLY_BUILDER_API_KEY: data.POLY_BUILDER_API_KEY,
-      POLY_BUILDER_PASSPHRASE: data.POLY_BUILDER_PASSPHRASE,
-    };
-  } catch {
-    return undefined;
   }
+  return {
+    POLY_BUILDER_SIGNATURE: signature,
+    POLY_BUILDER_TIMESTAMP: String(timestamp),
+    POLY_BUILDER_API_KEY: BUILDER_CREDS.apiKey,
+    POLY_BUILDER_PASSPHRASE: BUILDER_CREDS.passphrase,
+  };
 };
 
 const handleOrder = createOrderHandler({

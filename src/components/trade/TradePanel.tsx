@@ -15,7 +15,6 @@ import { usePolymarketSession } from '@/lib/polymarket/usePolymarketSession';
 import type { OrderBookState } from '@/lib/polymarket/marketDataService';
 import { TRADE_CONFIG } from '@/lib/polymarket/tradeConfig';
 import { createAndPostOrder } from '@/lib/polymarket/tradeService';
-import { createClobClient } from '@/lib/polymarket/clobClientFactory';
 import { resolveMarketPrice } from '@/lib/polymarket/orderPricing';
 import { ensureRelayerProxy } from '@/lib/polymarket/relayerService';
 import { useInjectedWallet } from '@/hooks/useInjectedWallet';
@@ -412,17 +411,10 @@ export function TradePanel({
       setApprovalOpen(true);
       setApprovalBusy(true);
       try {
-        const clobClient = createClobClient({
-          signer,
-          signatureType: TRADE_CONFIG.signatureType,
-          proxyWalletAddress: walletAddress,
-          host: TRADE_CONFIG.clobHost,
-        });
         await ensureWalletApprovals({
           walletClient: activeWalletClient,
           publicClient,
           walletAddress,
-          clobClient,
           onStep: updateApprovalStep,
         });
       } finally {

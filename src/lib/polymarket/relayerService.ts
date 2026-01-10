@@ -1,5 +1,4 @@
 import { RelayClient, RelayerTxType } from '@polymarket/builder-relayer-client';
-import type { BuilderConfig } from '@polymarket/builder-signing-sdk';
 import type { WalletClient } from 'viem';
 
 type RelayerService = {
@@ -13,7 +12,6 @@ type CreateRelayerServiceArgs = {
   relayerUrl: string;
   chainId: number;
   walletClient: WalletClient;
-  builderConfig?: BuilderConfig;
 };
 
 type RelayerDeployResponse = {
@@ -36,13 +34,12 @@ export const createRelayerService = async ({
   relayerUrl,
   chainId,
   walletClient,
-  builderConfig,
 }: CreateRelayerServiceArgs): Promise<RelayerService> => {
   const relayClient = new RelayClient(
     relayerUrl,
     chainId,
     walletClient,
-    builderConfig,
+    undefined,
     RelayerTxType.SAFE,
   );
   const expectedSafe = await (
