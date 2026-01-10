@@ -21,6 +21,8 @@ const fetchJson = async <T>(url: string): Promise<T> => {
   return (await res.json()) as T;
 };
 
+const CONDITION_ID_RE = /^0x[0-9a-fA-F]{64}$/;
+
 type ParsedOutcomes = {
   labels: string[];
   prices: number[];
@@ -85,6 +87,16 @@ const resolveLeadingPrice = (
   }
   return null;
 };
+
+const resolveThumbnailUrl = (market: RawMarket): string | null => {
+  const candidates = [market.image, market.imageUrl, market.icon]
+    .filter((value) => typeof value === 'string')
+    .map((value) => value?.trim())
+    .filter(Boolean) as string[];
+  return candidates[0] ?? null;
+};
+
+let loggedThumbnailHosts = false;
 
 const normalizeOutcomeLabel = (value: unknown): string | null => {
   if (typeof value !== 'string') return null;
@@ -247,9 +259,26 @@ export const getActiveMarkets = async (): Promise<MarketSummary[]> => {
         volume: Number(m.volume ?? m.volumeNum ?? 0),
         url: marketUrl,
         conditionId: m.conditionId,
+        thumbnailUrl: resolveThumbnailUrl(m),
       } satisfies MarketSummary;
     })
     .filter(Boolean) as MarketSummary[];
+
+  if (process.env.NODE_ENV !== 'production' && !loggedThumbnailHosts) {
+    const hosts = new Set<string>();
+    for (const market of mapped.slice(0, 50)) {
+      if (!market.thumbnailUrl) continue;
+      try {
+        hosts.add(new URL(market.thumbnailUrl).hostname);
+      } catch {
+        continue;
+      }
+    }
+    if (hosts.size) {
+      console.log('[PolyPicks] thumbnail hosts:', Array.from(hosts));
+    }
+    loggedThumbnailHosts = true;
+  }
 
   const enriched = await Promise.all(
     mapped.map(async (market) => {
@@ -314,6 +343,7 @@ export const getMarketDetails = async (
     volume: Number(market.volume ?? market.volumeNum ?? 0),
     url: marketUrl,
     conditionId: market.conditionId,
+    thumbnailUrl: resolveThumbnailUrl(market),
   };
 
   const tokenId = base.yesTokenId ?? base.noTokenId;
@@ -331,8 +361,17 @@ export const getMarketDetails = async (
 export const getMarketDetailsPayload = async (
   marketId: string,
 ): Promise<MarketDetailsResponse | null> => {
-  const url = `${POLYMARKET_CONFIG.gammaBaseUrl}/markets/${marketId}`;
-  const market = await fetchJson<RawMarket>(url);
+  let market: RawMarket | null = null;
+  if (CONDITION_ID_RE.test(marketId)) {
+    const url =
+      `${POLYMARKET_CONFIG.gammaBaseUrl}/markets?condition_ids=` +
+      `${encodeURIComponent(marketId)}&limit=1`;
+    const markets = await fetchJson<RawMarket[]>(url);
+    market = markets[0] ?? null;
+  } else {
+    const url = `${POLYMARKET_CONFIG.gammaBaseUrl}/markets/${marketId}`;
+    market = await fetchJson<RawMarket>(url);
+  }
 
   if (!market) return null;
 
@@ -378,6 +417,8 @@ export const getMarketDetailsPayload = async (
     resolved: outcomeResolution.resolved,
     winningOutcome: outcomeResolution.winningOutcome ?? null,
     winningOutcomeId: outcomeResolution.winningOutcomeId ?? null,
+    conditionId: market.conditionId ?? null,
+    thumbnailUrl: resolveThumbnailUrl(market),
     leading: {
       outcome: price.leadingOutcome,
       price: price.price,

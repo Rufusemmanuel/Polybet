@@ -30,6 +30,7 @@ export type MarketSummary = {
   volume: number;
   url: string;
   conditionId?: string;
+  thumbnailUrl?: string | null;
   bestBid?: number | null;
   bestAsk?: number | null;
   spreadBps?: number | null;
@@ -95,6 +96,9 @@ export type RawMarket = {
   conditionId?: string;
   yesTokenId?: string | null;
   noTokenId?: string | null;
+  image?: string | null;
+  imageUrl?: string | null;
+  icon?: string | null;
 };
 
 /**
@@ -168,6 +172,7 @@ export type MarketDetailsResponse = {
   about: { description?: string | null; resolution?: string | null };
   highConfidence: { min: number; max: number; currentProb: number; whyText: string };
   sports?: SportsEnrichment;
+  thumbnailUrl?: string | null;
   sportsMeta?: {
     enabled: boolean;
     reason?:
@@ -180,6 +185,7 @@ export type MarketDetailsResponse = {
       | 'rate_limited'
       | 'upstream_error';
   };
+  conditionId?: string | null;
 };
 
 export type SportsMatch = {
